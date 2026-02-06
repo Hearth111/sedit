@@ -44,6 +44,13 @@
 
       <section class="data-pane">
         <div class="pane-header"><h2>Data管理</h2></div>
+        <div class="spec-controls">
+          <label>タイトル <input id="specTitle" placeholder="シナリオタイトル" /></label>
+          <label>人数 <input id="specPlayerCount" placeholder="4人" /></label>
+          <label>タイプ <input id="specType" placeholder="協力型" /></label>
+          <label>サイクル <input id="specCycle" placeholder="3サイクル" /></label>
+          <label>推奨技能 <input id="specSkills" placeholder="第六感 / 隠形術" /></label>
+        </div>
         <div class="data-controls">
           <label>種別
             <select id="dataType">
@@ -71,7 +78,6 @@
     <template id="pageTemplate">
       <article class="paper-sheet">
         <div class="page-grid">
-          <aside class="sidebar-column"></aside>
           <div class="body-column left"></div>
           <div class="body-column right"></div>
         </div>

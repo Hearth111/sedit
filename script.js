@@ -11,6 +11,11 @@ const dataTypeInput = document.querySelector('#dataType');
 const dataKeyInput = document.querySelector('#dataKey');
 const dataValueInput = document.querySelector('#dataValue');
 const dataList = document.querySelector('#dataList');
+const specTitleInput = document.querySelector('#specTitle');
+const specPlayerCountInput = document.querySelector('#specPlayerCount');
+const specTypeInput = document.querySelector('#specType');
+const specCycleInput = document.querySelector('#specCycle');
+const specSkillsInput = document.querySelector('#specSkills');
 
 const project = {
   title: '深淵に揺れる月影',
@@ -18,6 +23,7 @@ const project = {
     playerCount: '4人',
     cycle: '3サイクル',
     type: '協力型',
+    skills: '第六感 / 隠形術',
   },
   content: `# 導入
 > 夜は深い。漆黒の空に浮かぶ月は、血のように赤い。
@@ -75,6 +81,9 @@ saveBtn.addEventListener('click', saveProject);
 printBtn.addEventListener('click', () => window.print());
 loadInput.addEventListener('change', loadProject);
 addDataBtn.addEventListener('click', upsertData);
+[specTitleInput, specPlayerCountInput, specTypeInput, specCycleInput, specSkillsInput].forEach((input) => {
+  input.addEventListener('input', updateSpecFromForm);
+});
 
 document.addEventListener('keydown', (event) => {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
@@ -194,6 +203,7 @@ function createElementForBlock(block) {
   if (block.type === 'paragraph') {
     const el = document.createElement('p');
     el.textContent = block.text;
+    if (block.className) el.className = block.className;
     return el;
   }
 
@@ -251,9 +261,9 @@ function createPage(isFirst = false) {
     header.innerHTML = `
       <div class="trailer"></div>
       <h2>${project.title}</h2>
-      <table class="spec-table">
+      <table class="spec-table overlay-spec">
         <tr><th>人数</th><td>${project.spec.playerCount}</td><th>タイプ</th><td>${project.spec.type}</td></tr>
-        <tr><th>サイクル</th><td>${project.spec.cycle}</td><th>推奨技能</th><td>第六感 / 隠形術</td></tr>
+        <tr><th>サイクル</th><td>${project.spec.cycle}</td><th>推奨技能</th><td>${project.spec.skills || ''}</td></tr>
       </table>
     `;
     page.querySelector('.page-grid').prepend(header);
@@ -266,7 +276,6 @@ function paginate(blocks) {
   let page = createPage(true);
   previewRoot.appendChild(page);
 
-  let sidebar = page.querySelector('.sidebar-column');
   let left = page.querySelector('.body-column.left');
   let right = page.querySelector('.body-column.right');
   let currentBody = left;
@@ -275,32 +284,14 @@ function paginate(blocks) {
     if (block.type === 'manual-break') {
       page = createPage();
       previewRoot.appendChild(page);
-      sidebar = page.querySelector('.sidebar-column');
       left = page.querySelector('.body-column.left');
       right = page.querySelector('.body-column.right');
       currentBody = left;
       continue;
     }
 
-    if (block.type === 'sidebar') {
-      const el = document.createElement('p');
-      el.className = 'sidebar-note';
-      el.textContent = block.text;
-      sidebar.appendChild(el);
-      if (sidebar.scrollHeight > sidebar.clientHeight) {
-        sidebar.removeChild(el);
-        page = createPage();
-        previewRoot.appendChild(page);
-        sidebar = page.querySelector('.sidebar-column');
-        left = page.querySelector('.body-column.left');
-        right = page.querySelector('.body-column.right');
-        currentBody = left;
-        sidebar.appendChild(el);
-      }
-      continue;
-    }
-
-    const el = createElementForBlock(block);
+    const nextBlock = block.type === 'sidebar' ? { type: 'paragraph', text: block.text, className: 'sidebar-note' } : block;
+    const el = createElementForBlock(nextBlock);
     currentBody.appendChild(el);
 
     if (currentBody.scrollHeight > currentBody.clientHeight) {
@@ -313,7 +304,6 @@ function paginate(blocks) {
           currentBody.removeChild(el);
           page = createPage();
           previewRoot.appendChild(page);
-          sidebar = page.querySelector('.sidebar-column');
           left = page.querySelector('.body-column.left');
           right = page.querySelector('.body-column.right');
           currentBody = left;
@@ -322,7 +312,6 @@ function paginate(blocks) {
       } else {
         page = createPage();
         previewRoot.appendChild(page);
-        sidebar = page.querySelector('.sidebar-column');
         left = page.querySelector('.body-column.left');
         right = page.querySelector('.body-column.right');
         currentBody = left;
@@ -400,10 +389,30 @@ async function loadProject(event) {
   const text = await file.text();
   const parsed = JSON.parse(text);
   project.title = parsed.title || project.title;
-  project.spec = parsed.spec || project.spec;
+  project.spec = { ...project.spec, ...(parsed.spec || {}) };
   project.content = parsed.content || '';
   project.data = parsed.data || project.data;
   editor.value = project.content;
+  syncSpecForm();
+  renderAll();
+}
+
+
+
+function syncSpecForm() {
+  specTitleInput.value = project.title;
+  specPlayerCountInput.value = project.spec.playerCount || '';
+  specTypeInput.value = project.spec.type || '';
+  specCycleInput.value = project.spec.cycle || '';
+  specSkillsInput.value = project.spec.skills || '';
+}
+
+function updateSpecFromForm() {
+  project.title = specTitleInput.value.trim() || '無題シナリオ';
+  project.spec.playerCount = specPlayerCountInput.value.trim();
+  project.spec.type = specTypeInput.value.trim();
+  project.spec.cycle = specCycleInput.value.trim();
+  project.spec.skills = specSkillsInput.value.trim();
   renderAll();
 }
 
@@ -427,4 +436,5 @@ function renderAll() {
   renderDataList();
 }
 
+syncSpecForm();
 renderAll();
