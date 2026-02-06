@@ -216,7 +216,7 @@ body {
 .page-grid {
   height: 100%;
   display: grid;
-  grid-template-columns: 0.42fr 1fr 1fr;
+  grid-template-columns: 0.52fr 1fr 1fr;
   grid-template-rows: auto 1fr;
   gap: 5mm;
 }
@@ -229,9 +229,10 @@ body {
 .sidebar-column {
   grid-column: 1;
   grid-row: 2;
-  font-size: 0.76em;
+  font-size: 10px;
   border-right: 1px solid #999;
-  padding-right: 2mm;
+  padding-right: 1.6mm;
+  line-height: 1.35;
 }
 
 .body-column.left {
@@ -242,6 +243,15 @@ body {
 .body-column.right {
   grid-column: 3;
   grid-row: 2;
+}
+
+.body-column {
+  font-size: 12px;
+  line-height: 1.42;
+}
+
+.body-column p {
+  margin: 0 0 0.45em;
 }
 
 .page-first-header {
@@ -287,9 +297,9 @@ h3.scene-header {
   color: #fff;
   padding: 4px 12px;
   font-weight: bold;
-  margin-top: 1.2em;
-  margin-bottom: 8px;
-  font-size: 1.1em;
+  margin-top: 0.9em;
+  margin-bottom: 6px;
+  font-size: 0.98em;
   border-left: 6px solid var(--accent-color);
   letter-spacing: 0.1em;
 }
@@ -297,12 +307,12 @@ h3.scene-header {
 .read-box {
   background: repeating-linear-gradient(45deg, #eee, #eee 2px, #f7f7f7 2px, #f7f7f7 4px);
   border: 1px solid #bbb;
-  padding: 6px;
-  font-size: 0.92em;
+  padding: 4px;
+  font-size: 0.84em;
 }
 
 .sidebar-note {
-  font-size: 0.95em;
+  font-size: 0.86em;
   background: transparent;
   border: 0;
   padding: 0 0 3px;
@@ -312,8 +322,8 @@ h3.scene-header {
 
 .data-card {
   border: 2px solid #111;
-  padding: 8px;
-  margin: 12px 0;
+  padding: 6px;
+  margin: 8px 0;
   background: #fff;
   position: relative;
 }

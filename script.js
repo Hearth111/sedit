@@ -16,9 +16,6 @@ const specPlayerCountInput = document.querySelector('#specPlayerCount');
 const specTypeInput = document.querySelector('#specType');
 const specLimitInput = document.querySelector('#specLimit');
 
-const MAIN_COLUMN_LIMIT_FIRST_PAGE = 1600;
-const MAIN_COLUMN_LIMIT_DEFAULT_PAGE = 2050;
-
 const project = {
   title: '深淵に揺れる月影',
   spec: {
@@ -224,7 +221,7 @@ function createElementForBlock(block) {
     const body = document.createElement('pre');
     body.textContent = block.text;
     body.style.whiteSpace = 'pre-wrap';
-    body.style.margin = '4px 0 0';
+    body.style.margin = '3px 0 0';
     wrap.append(title, body);
     return wrap;
   }
@@ -255,6 +252,7 @@ function createElementForBlock(block) {
 
 function createPage(isFirst = false) {
   const page = pageTemplate.content.firstElementChild.cloneNode(true);
+
   if (isFirst) {
     const header = document.createElement('section');
     header.className = 'page-first-header';
@@ -267,92 +265,84 @@ function createPage(isFirst = false) {
     `;
     page.querySelector('.page-grid').prepend(header);
   }
+
   return page;
 }
 
-function estimateBlockWeight(block) {
-  if (block.type === 'scene') return 170 + block.text.length * 2;
-  if (block.type === 'read') return 120 + block.text.length * 1.5;
-  if (block.type === 'paragraph') return 70 + block.text.length * 1.25;
-  if (block.type === 'spoiler') return 80 + block.text.length;
-  if (block.type === 'data-card') return 240 + block.text.length * 1.3;
-  if (block.type === 'scene-table') {
-    return 180 + block.rows.reduce((sum, row) => sum + row.length * 1.1, 0);
-  }
-  if (block.type === 'space') return 16;
-  return 80;
-}
-
-function createNewPageState(isFirst = false) {
+function makePageState(isFirst = false) {
   const page = createPage(isFirst);
   previewRoot.appendChild(page);
   return {
-    page,
     sidebar: page.querySelector('.sidebar-column'),
     left: page.querySelector('.body-column.left'),
     right: page.querySelector('.body-column.right'),
-    currentBody: 'left',
-    leftWeight: 0,
-    rightWeight: 0,
-    leftLimit: isFirst ? MAIN_COLUMN_LIMIT_FIRST_PAGE : MAIN_COLUMN_LIMIT_DEFAULT_PAGE,
-    rightLimit: isFirst ? MAIN_COLUMN_LIMIT_FIRST_PAGE : MAIN_COLUMN_LIMIT_DEFAULT_PAGE,
+    currentMainColumn: 'left',
   };
 }
 
-function appendSidebarNote(state, text) {
-  const note = document.createElement('p');
-  note.className = 'sidebar-note';
-  note.textContent = text;
-  state.sidebar.appendChild(note);
+function placeSidebarBlock(state, block) {
+  const el = document.createElement('p');
+  el.className = 'sidebar-note';
+  el.textContent = block.text;
 
-  if (state.sidebar.scrollHeight > state.sidebar.clientHeight) {
-    state.sidebar.removeChild(note);
-    state = createNewPageState(false);
-    state.sidebar.appendChild(note);
+  state.sidebar.appendChild(el);
+  if (state.sidebar.scrollHeight <= state.sidebar.clientHeight) return state;
+
+  state.sidebar.removeChild(el);
+  const wasEmpty = state.sidebar.childElementCount === 0;
+  if (wasEmpty) {
+    state.sidebar.appendChild(el);
+    return state;
   }
 
+  state = makePageState(false);
+  state.sidebar.appendChild(el);
   return state;
 }
 
-function appendMainBlock(state, block) {
-  const weight = estimateBlockWeight(block);
+function placeMainBlock(state, block) {
+  const el = createElementForBlock(block);
 
-  if (state.currentBody === 'left' && state.leftWeight + weight > state.leftLimit) {
-    state.currentBody = 'right';
+  while (true) {
+    const target = state.currentMainColumn === 'left' ? state.left : state.right;
+    target.appendChild(el);
+
+    if (target.scrollHeight <= target.clientHeight) {
+      return state;
+    }
+
+    target.removeChild(el);
+    const wasEmpty = target.childElementCount === 0;
+    if (wasEmpty) {
+      target.appendChild(el);
+      return state;
+    }
+
+    if (state.currentMainColumn === 'left') {
+      state.currentMainColumn = 'right';
+      continue;
+    }
+
+    state = makePageState(false);
   }
-
-  if (state.currentBody === 'right' && state.rightWeight + weight > state.rightLimit) {
-    state = createNewPageState(false);
-  }
-
-  const target = state.currentBody === 'left' ? state.left : state.right;
-  target.appendChild(createElementForBlock(block));
-
-  if (state.currentBody === 'left') {
-    state.leftWeight += weight;
-  } else {
-    state.rightWeight += weight;
-  }
-
-  return state;
 }
 
 function paginate(blocks) {
   previewRoot.innerHTML = '';
-  let state = createNewPageState(true);
+  let state = makePageState(true);
 
   for (const block of blocks) {
     if (block.type === 'manual-break') {
-      state = createNewPageState(false);
+      state = makePageState(false);
       continue;
     }
 
     if (block.type === 'sidebar') {
-      state = appendSidebarNote(state, block.text);
+      state = placeSidebarBlock(state, block);
       continue;
     }
 
-    state = appendMainBlock(state, block);
+    state = placeMainBlock(state, block);
   }
 }
 
