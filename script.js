@@ -11,13 +11,17 @@ const dataTypeInput = document.querySelector('#dataType');
 const dataKeyInput = document.querySelector('#dataKey');
 const dataValueInput = document.querySelector('#dataValue');
 const dataList = document.querySelector('#dataList');
+const specTitleInput = document.querySelector('#specTitle');
+const specPlayerCountInput = document.querySelector('#specPlayerCount');
+const specTypeInput = document.querySelector('#specType');
+const specLimitInput = document.querySelector('#specLimit');
 
 const project = {
   title: '深淵に揺れる月影',
   spec: {
     playerCount: '4人',
-    cycle: '3サイクル',
-    type: '協力型',
+    type: '対立型',
+    limit: '3',
   },
   content: `# 導入
 > 夜は深い。漆黒の空に浮かぶ月は、血のように赤い。
@@ -75,6 +79,9 @@ saveBtn.addEventListener('click', saveProject);
 printBtn.addEventListener('click', () => window.print());
 loadInput.addEventListener('change', loadProject);
 addDataBtn.addEventListener('click', upsertData);
+[specTitleInput, specPlayerCountInput, specTypeInput, specLimitInput].forEach((input) => {
+  input.addEventListener('input', updateSpecFromForm);
+});
 
 document.addEventListener('keydown', (event) => {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
@@ -214,7 +221,7 @@ function createElementForBlock(block) {
     const body = document.createElement('pre');
     body.textContent = block.text;
     body.style.whiteSpace = 'pre-wrap';
-    body.style.margin = '4px 0 0';
+    body.style.margin = '3px 0 0';
     wrap.append(title, body);
     return wrap;
   }
@@ -245,90 +252,97 @@ function createElementForBlock(block) {
 
 function createPage(isFirst = false) {
   const page = pageTemplate.content.firstElementChild.cloneNode(true);
+
   if (isFirst) {
     const header = document.createElement('section');
     header.className = 'page-first-header';
     header.innerHTML = `
       <div class="trailer"></div>
       <h2>${project.title}</h2>
-      <table class="spec-table">
-        <tr><th>人数</th><td>${project.spec.playerCount}</td><th>タイプ</th><td>${project.spec.type}</td></tr>
-        <tr><th>サイクル</th><td>${project.spec.cycle}</td><th>推奨技能</th><td>第六感 / 隠形術</td></tr>
+      <table class="spec-table overlay-spec">
+        <tr><th>タイプ</th><td>${project.spec.type || ''}</td><th>リミット</th><td>${project.spec.limit || ''}</td><th>プレイヤー人数</th><td>${project.spec.playerCount || ''}</td></tr>
       </table>
     `;
     page.querySelector('.page-grid').prepend(header);
   }
+
   return page;
+}
+
+function makePageState(isFirst = false) {
+  const page = createPage(isFirst);
+  previewRoot.appendChild(page);
+  return {
+    sidebar: page.querySelector('.sidebar-column'),
+    left: page.querySelector('.body-column.left'),
+    right: page.querySelector('.body-column.right'),
+    currentMainColumn: 'left',
+  };
+}
+
+function placeSidebarBlock(state, block) {
+  const el = document.createElement('p');
+  el.className = 'sidebar-note';
+  el.textContent = block.text;
+
+  state.sidebar.appendChild(el);
+  if (state.sidebar.scrollHeight <= state.sidebar.clientHeight) return state;
+
+  state.sidebar.removeChild(el);
+  const wasEmpty = state.sidebar.childElementCount === 0;
+  if (wasEmpty) {
+    state.sidebar.appendChild(el);
+    return state;
+  }
+
+  state = makePageState(false);
+  state.sidebar.appendChild(el);
+  return state;
+}
+
+function placeMainBlock(state, block) {
+  const el = createElementForBlock(block);
+
+  while (true) {
+    const target = state.currentMainColumn === 'left' ? state.left : state.right;
+    target.appendChild(el);
+
+    if (target.scrollHeight <= target.clientHeight) {
+      return state;
+    }
+
+    target.removeChild(el);
+    const wasEmpty = target.childElementCount === 0;
+    if (wasEmpty) {
+      target.appendChild(el);
+      return state;
+    }
+
+    if (state.currentMainColumn === 'left') {
+      state.currentMainColumn = 'right';
+      continue;
+    }
+
+    state = makePageState(false);
+  }
 }
 
 function paginate(blocks) {
   previewRoot.innerHTML = '';
-  let page = createPage(true);
-  previewRoot.appendChild(page);
-
-  let sidebar = page.querySelector('.sidebar-column');
-  let left = page.querySelector('.body-column.left');
-  let right = page.querySelector('.body-column.right');
-  let currentBody = left;
+  let state = makePageState(true);
 
   for (const block of blocks) {
     if (block.type === 'manual-break') {
-      page = createPage();
-      previewRoot.appendChild(page);
-      sidebar = page.querySelector('.sidebar-column');
-      left = page.querySelector('.body-column.left');
-      right = page.querySelector('.body-column.right');
-      currentBody = left;
+      state = makePageState(false);
       continue;
     }
 
     if (block.type === 'sidebar') {
-      const el = document.createElement('p');
-      el.className = 'sidebar-note';
-      el.textContent = block.text;
-      sidebar.appendChild(el);
-      if (sidebar.scrollHeight > sidebar.clientHeight) {
-        sidebar.removeChild(el);
-        page = createPage();
-        previewRoot.appendChild(page);
-        sidebar = page.querySelector('.sidebar-column');
-        left = page.querySelector('.body-column.left');
-        right = page.querySelector('.body-column.right');
-        currentBody = left;
-        sidebar.appendChild(el);
-      }
+      state = placeSidebarBlock(state, block);
       continue;
     }
 
-    const el = createElementForBlock(block);
-    currentBody.appendChild(el);
-
-    if (currentBody.scrollHeight > currentBody.clientHeight) {
-      currentBody.removeChild(el);
-
-      if (currentBody === left) {
-        currentBody = right;
-        currentBody.appendChild(el);
-        if (currentBody.scrollHeight > currentBody.clientHeight) {
-          currentBody.removeChild(el);
-          page = createPage();
-          previewRoot.appendChild(page);
-          sidebar = page.querySelector('.sidebar-column');
-          left = page.querySelector('.body-column.left');
-          right = page.querySelector('.body-column.right');
-          currentBody = left;
-          currentBody.appendChild(el);
-        }
-      } else {
-        page = createPage();
-        previewRoot.appendChild(page);
-        sidebar = page.querySelector('.sidebar-column');
-        left = page.querySelector('.body-column.left');
-        right = page.querySelector('.body-column.right');
-        currentBody = left;
-        currentBody.appendChild(el);
-      }
-    }
+    state = placeMainBlock(state, block);
   }
 }
 
@@ -400,10 +414,30 @@ async function loadProject(event) {
   const text = await file.text();
   const parsed = JSON.parse(text);
   project.title = parsed.title || project.title;
-  project.spec = parsed.spec || project.spec;
+  project.spec = {
+    ...project.spec,
+    ...(parsed.spec || {}),
+    limit: parsed.spec?.limit || parsed.spec?.cycle || project.spec.limit,
+  };
   project.content = parsed.content || '';
   project.data = parsed.data || project.data;
   editor.value = project.content;
+  syncSpecForm();
+  renderAll();
+}
+
+function syncSpecForm() {
+  specTitleInput.value = project.title;
+  specPlayerCountInput.value = project.spec.playerCount || '';
+  specTypeInput.value = project.spec.type || '';
+  specLimitInput.value = project.spec.limit || '';
+}
+
+function updateSpecFromForm() {
+  project.title = specTitleInput.value.trim() || '無題シナリオ';
+  project.spec.playerCount = specPlayerCountInput.value.trim();
+  project.spec.type = specTypeInput.value.trim();
+  project.spec.limit = specLimitInput.value.trim();
   renderAll();
 }
 
@@ -427,4 +461,5 @@ function renderAll() {
   renderDataList();
 }
 
+syncSpecForm();
 renderAll();

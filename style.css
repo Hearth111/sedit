@@ -120,6 +120,27 @@ body {
   resize: none;
 }
 
+
+.spec-controls {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.spec-controls label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.spec-controls input {
+  background: #111;
+  color: #ddd;
+  border: 1px solid #383838;
+  padding: 6px;
+}
+
 .data-controls {
   display: grid;
   gap: 8px;
@@ -129,7 +150,7 @@ body {
 .data-controls label {
   display: grid;
   gap: 4px;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .data-controls input,
@@ -182,20 +203,22 @@ body {
 }
 
 .paper-sheet {
-  width: 210mm;
-  min-height: 297mm;
+  width: 182mm;
+  height: 257mm;
   background: white;
   color: #111;
   font-family: 'Shippori Mincho', serif;
   box-shadow: var(--paper-shadow);
   padding: 10mm 10mm 12mm;
+  overflow: hidden;
 }
 
 .page-grid {
   height: 100%;
   display: grid;
-  grid-template-columns: 1fr 3fr 3fr;
-  gap: 6mm;
+  grid-template-columns: 0.52fr 1fr 1fr;
+  grid-template-rows: auto 1fr;
+  gap: 5mm;
 }
 
 .sidebar-column,
@@ -203,27 +226,70 @@ body {
   overflow: hidden;
 }
 
+.sidebar-column {
+  grid-column: 1;
+  grid-row: 2;
+  font-size: 10px;
+  border-right: 1px solid #999;
+  padding-right: 1.6mm;
+  line-height: 1.35;
+}
+
+.body-column.left {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.body-column.right {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.body-column {
+  font-size: 12px;
+  line-height: 1.42;
+}
+
+.body-column p {
+  margin: 0 0 0.45em;
+}
+
 .page-first-header {
   grid-column: 1 / 4;
-  margin-bottom: 4mm;
+  margin-bottom: 3mm;
+  position: relative;
 }
 
 .trailer {
   height: 45mm;
   background: linear-gradient(120deg, #2b2b2b, #0d0d0d 70%, #530000);
-  margin-bottom: 3mm;
+}
+
+.overlay-spec {
+  position: absolute;
+  left: 8mm;
+  right: 8mm;
+  bottom: 2mm;
+  background: rgba(20, 20, 20, 0.82);
+  color: #fff;
+}
+
+.overlay-spec th,
+.overlay-spec td {
+  border-color: #d5d5d5;
 }
 
 .spec-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .spec-table th,
 .spec-table td {
   border: 1px solid #222;
-  padding: 4px;
+  padding: 0 3px;
+  line-height: 1.25;
 }
 
 h3.scene-header {
@@ -231,9 +297,9 @@ h3.scene-header {
   color: #fff;
   padding: 4px 12px;
   font-weight: bold;
-  margin-top: 1.2em;
-  margin-bottom: 8px;
-  font-size: 1.1em;
+  margin-top: 0.9em;
+  margin-bottom: 6px;
+  font-size: 0.98em;
   border-left: 6px solid var(--accent-color);
   letter-spacing: 0.1em;
 }
@@ -241,22 +307,23 @@ h3.scene-header {
 .read-box {
   background: repeating-linear-gradient(45deg, #eee, #eee 2px, #f7f7f7 2px, #f7f7f7 4px);
   border: 1px solid #bbb;
-  padding: 6px;
-  font-size: 0.92em;
+  padding: 4px;
+  font-size: 0.84em;
 }
 
 .sidebar-note {
-  font-size: 0.82em;
-  background: #f4f4f4;
-  border-left: 2px solid #666;
-  padding: 4px;
-  margin-bottom: 5px;
+  font-size: 0.86em;
+  background: transparent;
+  border: 0;
+  padding: 0 0 3px;
+  margin: 0 0 3px;
+  line-height: 1.45;
 }
 
 .data-card {
   border: 2px solid #111;
-  padding: 8px;
-  margin: 12px 0;
+  padding: 6px;
+  margin: 8px 0;
   background: #fff;
   position: relative;
 }
