@@ -1,0 +1,263 @@
+:root {
+  --bg: #111;
+  --panel: #222;
+  --accent: #d00;
+  --text: #eee;
+  --muted: #aaa;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Yu Gothic UI", "Hiragino Kaku Gothic ProN", sans-serif;
+}
+
+.app-header {
+  height: 56px;
+  padding: 0 16px;
+  border-bottom: 1px solid #333;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #131313;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+button {
+  border: 1px solid #444;
+  background: var(--panel);
+  color: var(--text);
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--accent);
+}
+
+button.accent {
+  border-color: var(--accent);
+}
+
+.layout {
+  height: calc(100vh - 88px);
+  display: grid;
+  grid-template-columns: 56px minmax(40%, 50%) minmax(50%, 60%);
+}
+
+.tool-column {
+  border-right: 1px solid #333;
+  background: #151515;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 6px;
+}
+
+.tool {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+}
+
+.editor-panel,
+.preview-panel {
+  border-right: 1px solid #333;
+  min-height: 0;
+}
+
+.panel-head {
+  border-bottom: 1px solid #333;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.panel-head label {
+  font-size: 12px;
+  color: var(--muted);
+  display: grid;
+  gap: 4px;
+}
+
+.panel-head input {
+  background: #111;
+  color: var(--text);
+  border: 1px solid #444;
+  padding: 8px;
+}
+
+#editor {
+  width: 100%;
+  height: calc(100% - 95px);
+  background: #181818;
+  color: var(--text);
+  border: 0;
+  padding: 16px;
+  line-height: 1.7;
+  resize: none;
+}
+
+.preview-panel {
+  padding: 14px;
+  overflow: auto;
+  background: #161616;
+}
+
+.preview-a4 {
+  margin: 0 auto;
+  width: min(100%, 900px);
+  min-height: 100%;
+  background: #fff;
+  color: #111;
+  box-shadow: 0 0 28px rgba(0, 0, 0, 0.7);
+  padding: 22mm 16mm;
+}
+
+.scenario-body {
+  column-count: 2;
+  column-gap: 8mm;
+}
+
+.scene-title {
+  break-inside: avoid;
+  background: #111;
+  color: #fff;
+  border-left: 6px solid var(--accent);
+  padding: 6px 10px;
+  margin: 0 0 12px;
+  font-size: 1rem;
+}
+
+.read-aloud {
+  break-inside: avoid;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  background: #efefef;
+  border-left: 4px solid #9a9a9a;
+}
+
+.secret {
+  break-inside: avoid;
+  display: block;
+  margin: 0 0 10px;
+  padding: 8px;
+  background: #000;
+  color: #000;
+  cursor: pointer;
+}
+
+.secret.revealed {
+  color: #e3e3e3;
+}
+
+.ho-card,
+.scene-table {
+  break-inside: avoid;
+  border: 1px solid #444;
+  margin: 0 0 10px;
+}
+
+.ho-card h4 {
+  margin: 0;
+  padding: 6px 8px;
+  background: #181818;
+  color: #f0f0f0;
+}
+
+.ho-card p {
+  margin: 0;
+  padding: 8px;
+  white-space: pre-wrap;
+}
+
+.scene-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.scene-table th,
+.scene-table td {
+  border: 1px solid #777;
+  padding: 4px 6px;
+  font-size: 12px;
+}
+
+.paragraph {
+  margin: 0 0 8px;
+}
+
+#statusBar {
+  height: 32px;
+  border-top: 1px solid #333;
+  padding: 7px 14px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 20mm;
+  }
+
+  body {
+    background: #fff;
+    color: #000;
+  }
+
+  .app-header,
+  .tool-column,
+  .editor-panel,
+  #statusBar {
+    display: none;
+  }
+
+  .layout {
+    display: block;
+    height: auto;
+  }
+
+  .preview-panel {
+    padding: 0;
+    border: 0;
+    overflow: visible;
+    background: #fff;
+  }
+
+  .preview-a4 {
+    width: auto;
+    min-height: auto;
+    box-shadow: none;
+    padding: 0;
+  }
+
+  .scenario-body {
+    column-count: 2;
+    column-gap: 8mm;
+  }
+
+  .scene-title,
+  .read-aloud,
+  .ho-card,
+  .scene-table,
+  .secret {
+    break-inside: avoid;
+  }
+}
