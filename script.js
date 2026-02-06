@@ -14,16 +14,17 @@ const dataList = document.querySelector('#dataList');
 const specTitleInput = document.querySelector('#specTitle');
 const specPlayerCountInput = document.querySelector('#specPlayerCount');
 const specTypeInput = document.querySelector('#specType');
-const specCycleInput = document.querySelector('#specCycle');
-const specSkillsInput = document.querySelector('#specSkills');
+const specLimitInput = document.querySelector('#specLimit');
+
+const MAIN_COLUMN_LIMIT_FIRST_PAGE = 1600;
+const MAIN_COLUMN_LIMIT_DEFAULT_PAGE = 2050;
 
 const project = {
   title: '深淵に揺れる月影',
   spec: {
     playerCount: '4人',
-    cycle: '3サイクル',
-    type: '協力型',
-    skills: '第六感 / 隠形術',
+    type: '対立型',
+    limit: '3',
   },
   content: `# 導入
 > 夜は深い。漆黒の空に浮かぶ月は、血のように赤い。
@@ -81,7 +82,7 @@ saveBtn.addEventListener('click', saveProject);
 printBtn.addEventListener('click', () => window.print());
 loadInput.addEventListener('change', loadProject);
 addDataBtn.addEventListener('click', upsertData);
-[specTitleInput, specPlayerCountInput, specTypeInput, specCycleInput, specSkillsInput].forEach((input) => {
+[specTitleInput, specPlayerCountInput, specTypeInput, specLimitInput].forEach((input) => {
   input.addEventListener('input', updateSpecFromForm);
 });
 
@@ -203,7 +204,6 @@ function createElementForBlock(block) {
   if (block.type === 'paragraph') {
     const el = document.createElement('p');
     el.textContent = block.text;
-    if (block.className) el.className = block.className;
     return el;
   }
 
@@ -262,8 +262,7 @@ function createPage(isFirst = false) {
       <div class="trailer"></div>
       <h2>${project.title}</h2>
       <table class="spec-table overlay-spec">
-        <tr><th>人数</th><td>${project.spec.playerCount}</td><th>タイプ</th><td>${project.spec.type}</td></tr>
-        <tr><th>サイクル</th><td>${project.spec.cycle}</td><th>推奨技能</th><td>${project.spec.skills || ''}</td></tr>
+        <tr><th>タイプ</th><td>${project.spec.type || ''}</td><th>リミット</th><td>${project.spec.limit || ''}</td><th>プレイヤー人数</th><td>${project.spec.playerCount || ''}</td></tr>
       </table>
     `;
     page.querySelector('.page-grid').prepend(header);
@@ -271,53 +270,89 @@ function createPage(isFirst = false) {
   return page;
 }
 
+function estimateBlockWeight(block) {
+  if (block.type === 'scene') return 170 + block.text.length * 2;
+  if (block.type === 'read') return 120 + block.text.length * 1.5;
+  if (block.type === 'paragraph') return 70 + block.text.length * 1.25;
+  if (block.type === 'spoiler') return 80 + block.text.length;
+  if (block.type === 'data-card') return 240 + block.text.length * 1.3;
+  if (block.type === 'scene-table') {
+    return 180 + block.rows.reduce((sum, row) => sum + row.length * 1.1, 0);
+  }
+  if (block.type === 'space') return 16;
+  return 80;
+}
+
+function createNewPageState(isFirst = false) {
+  const page = createPage(isFirst);
+  previewRoot.appendChild(page);
+  return {
+    page,
+    sidebar: page.querySelector('.sidebar-column'),
+    left: page.querySelector('.body-column.left'),
+    right: page.querySelector('.body-column.right'),
+    currentBody: 'left',
+    leftWeight: 0,
+    rightWeight: 0,
+    leftLimit: isFirst ? MAIN_COLUMN_LIMIT_FIRST_PAGE : MAIN_COLUMN_LIMIT_DEFAULT_PAGE,
+    rightLimit: isFirst ? MAIN_COLUMN_LIMIT_FIRST_PAGE : MAIN_COLUMN_LIMIT_DEFAULT_PAGE,
+  };
+}
+
+function appendSidebarNote(state, text) {
+  const note = document.createElement('p');
+  note.className = 'sidebar-note';
+  note.textContent = text;
+  state.sidebar.appendChild(note);
+
+  if (state.sidebar.scrollHeight > state.sidebar.clientHeight) {
+    state.sidebar.removeChild(note);
+    state = createNewPageState(false);
+    state.sidebar.appendChild(note);
+  }
+
+  return state;
+}
+
+function appendMainBlock(state, block) {
+  const weight = estimateBlockWeight(block);
+
+  if (state.currentBody === 'left' && state.leftWeight + weight > state.leftLimit) {
+    state.currentBody = 'right';
+  }
+
+  if (state.currentBody === 'right' && state.rightWeight + weight > state.rightLimit) {
+    state = createNewPageState(false);
+  }
+
+  const target = state.currentBody === 'left' ? state.left : state.right;
+  target.appendChild(createElementForBlock(block));
+
+  if (state.currentBody === 'left') {
+    state.leftWeight += weight;
+  } else {
+    state.rightWeight += weight;
+  }
+
+  return state;
+}
+
 function paginate(blocks) {
   previewRoot.innerHTML = '';
-  let page = createPage(true);
-  previewRoot.appendChild(page);
-
-  let left = page.querySelector('.body-column.left');
-  let right = page.querySelector('.body-column.right');
-  let currentBody = left;
+  let state = createNewPageState(true);
 
   for (const block of blocks) {
     if (block.type === 'manual-break') {
-      page = createPage();
-      previewRoot.appendChild(page);
-      left = page.querySelector('.body-column.left');
-      right = page.querySelector('.body-column.right');
-      currentBody = left;
+      state = createNewPageState(false);
       continue;
     }
 
-    const nextBlock = block.type === 'sidebar' ? { type: 'paragraph', text: block.text, className: 'sidebar-note' } : block;
-    const el = createElementForBlock(nextBlock);
-    currentBody.appendChild(el);
-
-    if (currentBody.scrollHeight > currentBody.clientHeight) {
-      currentBody.removeChild(el);
-
-      if (currentBody === left) {
-        currentBody = right;
-        currentBody.appendChild(el);
-        if (currentBody.scrollHeight > currentBody.clientHeight) {
-          currentBody.removeChild(el);
-          page = createPage();
-          previewRoot.appendChild(page);
-          left = page.querySelector('.body-column.left');
-          right = page.querySelector('.body-column.right');
-          currentBody = left;
-          currentBody.appendChild(el);
-        }
-      } else {
-        page = createPage();
-        previewRoot.appendChild(page);
-        left = page.querySelector('.body-column.left');
-        right = page.querySelector('.body-column.right');
-        currentBody = left;
-        currentBody.appendChild(el);
-      }
+    if (block.type === 'sidebar') {
+      state = appendSidebarNote(state, block.text);
+      continue;
     }
+
+    state = appendMainBlock(state, block);
   }
 }
 
@@ -389,7 +424,11 @@ async function loadProject(event) {
   const text = await file.text();
   const parsed = JSON.parse(text);
   project.title = parsed.title || project.title;
-  project.spec = { ...project.spec, ...(parsed.spec || {}) };
+  project.spec = {
+    ...project.spec,
+    ...(parsed.spec || {}),
+    limit: parsed.spec?.limit || parsed.spec?.cycle || project.spec.limit,
+  };
   project.content = parsed.content || '';
   project.data = parsed.data || project.data;
   editor.value = project.content;
@@ -397,22 +436,18 @@ async function loadProject(event) {
   renderAll();
 }
 
-
-
 function syncSpecForm() {
   specTitleInput.value = project.title;
   specPlayerCountInput.value = project.spec.playerCount || '';
   specTypeInput.value = project.spec.type || '';
-  specCycleInput.value = project.spec.cycle || '';
-  specSkillsInput.value = project.spec.skills || '';
+  specLimitInput.value = project.spec.limit || '';
 }
 
 function updateSpecFromForm() {
   project.title = specTitleInput.value.trim() || '無題シナリオ';
   project.spec.playerCount = specPlayerCountInput.value.trim();
   project.spec.type = specTypeInput.value.trim();
-  project.spec.cycle = specCycleInput.value.trim();
-  project.spec.skills = specSkillsInput.value.trim();
+  project.spec.limit = specLimitInput.value.trim();
   renderAll();
 }
 
