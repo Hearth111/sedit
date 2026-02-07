@@ -1,173 +1,225 @@
-from __future__ import annotations
-
-import re
-import subprocess
-import tempfile
-from pathlib import Path
-
 import flet as ft
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.units import mm
+import os
 
-
-ACCENT = "#dd0000"
-BG = "#111111"
-
-
-def markdown_like_to_typst(text: str, title: str) -> str:
-    """要件定義の簡易マークアップをTypst本文へ変換する。"""
-    lines: list[str] = []
-
-    for raw in text.splitlines():
-        line = raw.rstrip()
-
-        if not line:
-            lines.append("")
-            continue
-
-        if line.startswith("# "):
-            heading = line[2:].strip().replace('"', '\\"')
-            lines.append(f"= {heading}")
-            continue
-
-        if line.startswith(">"):
-            quote = line[1:].strip().replace('"', '\\"')
-            lines.append(f"#quote(block: true)[{quote}]")
-            continue
-
-        line = re.sub(r"\{\{(.*?)\}\}", r"*【\\1】*", line)
-        lines.append(line)
-
-    body = "\n".join(lines)
-
-    return f'''#set page(paper: "a4", margin: 16pt)
-#set text(fill: rgb("#f0f0f0"), size: 10pt)
-#set heading(fill: rgb("{ACCENT}"))
-
-#rect(fill: rgb("{BG}"), inset: 0pt, radius: 0pt)[
-  #set text(fill: rgb("#f0f0f0"), size: 10pt)
-  #set heading(fill: rgb("{ACCENT}"))
-  #align(center)[
-    #text(weight: "bold", size: 18pt, fill: rgb("{ACCENT}"))[{title.replace('"', '\\"')}]
-  ]
-
-  #v(8pt)
-  #columns(2, gutter: 14pt)[
-{indent_typst_block(body, 4)}
-  ]
-]
-'''
-
-
-def indent_typst_block(text: str, spaces: int) -> str:
-    pad = " " * spaces
-    return "\n".join(f"{pad}{line}" if line else "" for line in text.splitlines())
-
-
-def export_pdf(title: str, body: str, output_pdf: Path) -> None:
-    typst_content = markdown_like_to_typst(body, title)
-
-    with tempfile.TemporaryDirectory() as temp_dir:
-        typ_file = Path(temp_dir) / "scenario.typ"
-        typ_file.write_text(typst_content, encoding="utf-8")
-
-        command = [
-            "typst",
-            "compile",
-            str(typ_file),
-            str(output_pdf),
-        ]
-        subprocess.run(command, check=True)
-
-
-def main(page: ft.Page) -> None:
-    page.title = "Shinobi Writer"
+def main(page: ft.Page):
+    # ■ 1. アプリ設定
+    page.title = "Shinobi-Writer (v0.2)"
     page.theme_mode = ft.ThemeMode.DARK
-    page.window.width = 1280
-    page.window.height = 800
-    page.padding = 16
+    page.padding = 10
+    page.window_width = 1400
+    page.window_height = 900
+    page.bgcolor = "#111111"
 
-    title_input = ft.TextField(label="タイトル", value="シナリオタイトル", border_color=ACCENT)
-    output_path_input = ft.TextField(label="出力先PDFパス", border_color=ACCENT)
-    body_input = ft.TextField(
-        label="本文",
-        multiline=True,
-        min_lines=30,
-        expand=True,
-        border_color=ACCENT,
-    )
+    # フォント登録（前回と同じ）
+    try:
+        pdfmetrics.registerFont(TTFont('Japanese', 'C:\\Windows\\Fonts\\meiryo.ttc'))
+    except:
+        pass
 
-    status_text = ft.Text(color=ACCENT)
+    # アプリの状態変数
+    current_img_path = ""
 
-    def pick_output(_: ft.ControlEvent) -> None:
-        if page.file_picker:
-            return
+    # ■ 2. 機能の実装
 
-    def on_save_result(e: ft.FilePickerResultEvent) -> None:
-        if e.path:
-            output_path_input.value = e.path
-            page.update()
+    # 目次更新機能
+    def update_toc(e):
+        # 目次リストをクリア
+        toc_view.controls.clear()
+        
+        # 本文を行ごとに解析
+        lines = editor_field.value.split('\n')
+        for i, line in enumerate(lines):
+            line = line.strip()
+            if line.startswith('# '):
+                # 見出し (# )
+                toc_view.controls.append(
+                    ft.Container(
+                        content=ft.Text(f"■ {line.replace('# ', '')}", size=12, weight="bold", color="#dd0000"),
+                        padding=ft.padding.only(top=10, bottom=5),
+                        on_click=lambda _, pos=i: scroll_to_line(pos) # ジャンプ機能(簡易)
+                    )
+                )
+            elif line.startswith('## '):
+                # 小見出し (## )
+                toc_view.controls.append(
+                    ft.Container(
+                        content=ft.Text(f"  - {line.replace('## ', '')}", size=11, color="#aaaaaa"),
+                        padding=ft.padding.only(left=10, bottom=2),
+                        on_click=lambda _, pos=i: scroll_to_line(pos)
+                    )
+                )
+        toc_view.update()
 
-    picker = ft.FilePicker(on_result=on_save_result)
-    page.overlay.append(picker)
-
-    def do_export(_: ft.ControlEvent) -> None:
-        if not output_path_input.value:
-            status_text.value = "出力先PDFパスを指定してください。"
-            page.update()
-            return
-
-        try:
-            out = Path(output_path_input.value)
-            export_pdf(title_input.value or "無題", body_input.value or "", out)
-            status_text.value = f"PDF出力が完了しました: {out}"
-        except FileNotFoundError:
-            status_text.value = "typst コマンドが見つかりません。Typstをインストールしてください。"
-        except subprocess.CalledProcessError as err:
-            status_text.value = f"PDF出力に失敗しました: {err}"
-
+    # エディタのスクロール機能（現在はFletの制限で完全な行ジャンプは難しいが、枠組みだけ用意）
+    def scroll_to_line(line_index):
+        # 将来的にここにスクロール処理を実装
+        print(f"Jump to line: {line_index}")
+        page.snack_bar = ft.SnackBar(ft.Text(f"行ジャンプ: {line_index}行目 (機能開発中)"), bgcolor="#333")
+        page.snack_bar.open = True
         page.update()
 
-    left = ft.Container(
-        content=body_input,
-        expand=3,
-        bgcolor=BG,
-        border_radius=8,
-        padding=8,
+    # 画像選択機能
+    def on_img_picked(e: ft.FilePickerResultEvent):
+        nonlocal current_img_path
+        if e.files:
+            file_path = e.files[0].path
+            current_img_path = file_path
+            # プレビュー更新
+            img_preview.src = file_path
+            img_preview.visible = True
+            img_info.value = os.path.basename(file_path)
+            img_info.update()
+            img_preview.update()
+
+    # 画像選択ダイアログ
+    img_picker = ft.FilePicker(on_result=on_img_picked)
+    page.overlay.append(img_picker)
+
+    # PDF保存機能
+    def save_pdf(e: ft.FilePickerResultEvent):
+        save_path = e.path
+        if save_path:
+            try:
+                c = canvas.Canvas(save_path, pagesize=A4)
+                width, height = A4
+                
+                # 日本語フォント設定
+                try: c.setFont("Japanese", 10)
+                except: pass
+
+                # --- 1ページ目の描画 ---
+                cursor_y = height - 20*mm
+                
+                # 画像描画 (選択されていたら)
+                if current_img_path:
+                    try:
+                        # 画像を上部に描画 (幅いっぱい、高さアスペクト維持は省略して固定)
+                        c.drawImage(current_img_path, 20*mm, height - 100*mm, width=170*mm, height=80*mm, preserveAspectRatio=True)
+                        cursor_y -= 90*mm
+                    except:
+                        pass
+
+                # タイトル描画
+                c.setFont("Japanese", 24)
+                c.drawString(20*mm, cursor_y, title_field.value)
+                cursor_y -= 15*mm
+
+                # --- 本文描画 (簡易) ---
+                c.setFont("Japanese", 10)
+                text = editor_field.value
+                for line in text.split('\n'):
+                    if cursor_y < 20*mm:
+                        c.showPage()
+                        cursor_y = height - 20*mm
+                        try: c.setFont("Japanese", 10)
+                        except: pass
+                    
+                    c.drawString(20*mm, cursor_y, line)
+                    cursor_y -= 6*mm
+
+                c.save()
+                page.snack_bar = ft.SnackBar(ft.Text(f"保存しました: {save_path}"), bgcolor="green")
+                page.snack_bar.open = True
+                page.update()
+            except Exception as err:
+                page.snack_bar = ft.SnackBar(ft.Text(f"エラー: {err}"), bgcolor="red")
+                page.snack_bar.open = True
+                page.update()
+
+    save_dialog = ft.FilePicker(on_result=save_pdf)
+    page.overlay.append(save_dialog)
+
+    # ■ 3. UIコンポーネント作成
+
+    # [左カラム] 目次・ツール
+    toc_view = ft.Column(scroll=ft.ScrollMode.AUTO)
+    left_col = ft.Container(
+        content=ft.Column([
+            ft.Text("INDEX", size=12, weight="bold", color="#555"),
+            ft.Divider(color="#333"),
+            toc_view
+        ]),
+        bgcolor="#161616",
+        padding=10,
+        border=ft.border.only(right=ft.BorderSide(1, "#333"))
     )
 
-    right = ft.Container(
-        expand=2,
-        bgcolor=BG,
-        border_radius=8,
-        padding=12,
-        content=ft.Column(
-            controls=[
-                ft.Text("設定", color=ACCENT, size=20, weight=ft.FontWeight.BOLD),
-                title_input,
-                output_path_input,
-                ft.Row(
-                    controls=[
-                        ft.ElevatedButton(
-                            text="保存先を選択",
-                            on_click=lambda _: picker.save_file(file_name="scenario.pdf", allowed_extensions=["pdf"]),
-                            bgcolor=ACCENT,
-                            color="#ffffff",
-                        ),
-                    ]
-                ),
-                ft.ElevatedButton(
-                    text="PDF出力",
-                    on_click=do_export,
-                    bgcolor=ACCENT,
-                    color="#ffffff",
-                ),
-                status_text,
+    # [中カラム] エディタ
+    editor_field = ft.TextField(
+        multiline=True,
+        min_lines=40,
+        text_size=14,
+        bgcolor="#111",
+        color="#ddd",
+        border_color="transparent", # 枠線を消して没入感アップ
+        cursor_color="#d00",
+        hint_text="# タイトル\n\n> ここに描写を書く...",
+        on_change=update_toc, # 文字入力のたびに目次更新
+        expand=True
+    )
+
+    # [右カラム] 設定・情報
+    title_field = ft.TextField(label="タイトル", bgcolor="#222", border_color="#444", text_size=12)
+    
+    img_preview = ft.Image(src="", width=200, height=120, fit=ft.ImageFit.CONTAIN, visible=False)
+    img_info = ft.Text("画像未選択", size=10, color="#666")
+    
+    img_btn = ft.ElevatedButton(
+        "画像を選択", 
+        icon=ft.icons.IMAGE,
+        style=ft.ButtonStyle(bgcolor="#333", color="white"),
+        on_click=lambda _: img_picker.pick_files(allow_multiple=False, allowed_extensions=["png", "jpg", "jpeg"])
+    )
+
+    save_btn = ft.ElevatedButton(
+        "PDF保存", 
+        icon=ft.icons.SAVE_ALT,
+        style=ft.ButtonStyle(bgcolor="#d00", color="white", shape=ft.RoundedRectangleBorder(radius=4)),
+        on_click=lambda _: save_dialog.save_file(file_name=f"{title_field.value}.pdf")
+    )
+
+    right_col = ft.Container(
+        content=ft.Column([
+            ft.Text("SETTINGS", size=12, weight="bold", color="#555"),
+            ft.Divider(color="#333"),
+            title_field,
+            ft.Container(height=10),
+            ft.Text("トレーラー画像", size=11, color="#aaa"),
+            ft.Container(
+                content=img_preview,
+                bgcolor="#000",
+                alignment=ft.alignment.center,
+                border=ft.border.all(1, "#333"),
+                height=120
+            ),
+            ft.Row([img_info, img_btn], alignment="spaceBetween"),
+            ft.Divider(color="#333"),
+            ft.Container(content=save_btn, padding=ft.padding.only(top=20))
+        ]),
+        bgcolor="#161616",
+        padding=10,
+        border=ft.border.only(left=ft.BorderSide(1, "#333"))
+    )
+
+    # ■ 4. レイアウト配置 (3カラム)
+    page.add(
+        ft.Row(
+            [
+                ft.Container(content=left_col, expand=2),  # 左 (20%)
+                ft.Container(content=editor_field, expand=6, padding=20), # 中 (60%)
+                ft.Container(content=right_col, expand=2)  # 右 (20%)
             ],
-            spacing=12,
-        ),
+            expand=True,
+            spacing=0 # 隙間なく配置
+        )
     )
 
-    page.add(ft.Row([left, right], expand=True, spacing=12))
+    # 初期更新
+    update_toc(None)
 
-
-if __name__ == "__main__":
-    ft.app(target=main)
+ft.app(target=main)
