@@ -198,7 +198,7 @@
       column-count: 2;
       column-gap: 8mm;
       text-align: justify;
-      line-height: 1.75;
+      line-height: 1.6;
       font-family: "Yu Mincho", "Hiragino Mincho ProN", serif;
       font-size: 10.5pt;
     }
@@ -208,7 +208,7 @@
     }
 
     .print-body p {
-      margin: 0 0 0.8em;
+      margin: 0 0 0.35em;
       break-inside: avoid;
       page-break-inside: avoid;
     }
@@ -270,6 +270,11 @@
       margin: 0 0 0.9em;
       break-inside: avoid;
       page-break-inside: avoid;
+    }
+
+    .print-body p.blank-line {
+      margin: 0 0 0.45em;
+      min-height: 0.35em;
     }
 
     .page-break {
@@ -467,7 +472,7 @@
       for (const line of lines) {
         const text = line.trim();
         if (text === "") {
-          html.push("<p></p>");
+          html.push("<p class=\"blank-line\"></p>");
           continue;
         }
 
