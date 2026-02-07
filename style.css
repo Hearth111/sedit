@@ -1,0 +1,204 @@
+:root {
+  --bg: #1a1a1a;
+  --panel: #232323;
+  --text: #ececec;
+  --accent: #d00;
+  --muted: #9a9a9a;
+  --line: #383838;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: #161616;
+}
+
+.app-header h1 { margin: 0; font-size: 1rem; letter-spacing: 0.08em; }
+.header-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+button, .file-label {
+  background: #2b2b2b;
+  color: var(--text);
+  border: 1px solid #4b4b4b;
+  padding: 6px 10px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+button:hover, .file-label:hover { border-color: var(--accent); }
+button.active { background: #390707; border-color: var(--accent); }
+#file-json { display: none; }
+
+.layout {
+  display: grid;
+  grid-template-columns: 320px 1fr 1fr;
+  gap: 10px;
+  height: calc(100vh - 58px);
+  padding: 10px;
+}
+.left-panel, .editor-panel, .preview-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.left-panel { overflow-y: auto; }
+.panel-block { border-bottom: 1px solid var(--line); padding: 10px; }
+.panel-block h2, .editor-panel h2, .preview-panel h2 {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  color: #ffb8b8;
+}
+
+.tool-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+input, textarea {
+  width: 100%;
+  background: #181818;
+  border: 1px solid #464646;
+  color: var(--text);
+  border-radius: 4px;
+  padding: 6px;
+}
+textarea { min-height: 72px; resize: vertical; }
+
+.editor-panel, .preview-panel {
+  display: flex;
+  flex-direction: column;
+}
+#editor {
+  flex: 1;
+  min-height: 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  line-height: 1.6;
+}
+
+.preview-content {
+  flex: 1;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+  padding: 12px;
+  line-height: 1.7;
+}
+
+.scene-title {
+  background: #000;
+  border-left: 6px solid var(--accent);
+  box-shadow: 0 2px 6px rgba(0,0,0,.5);
+  padding: 6px 10px;
+  margin: 16px 0 10px;
+}
+.description-box {
+  background: repeating-linear-gradient(45deg, #2c2c2c, #2c2c2c 8px, #303030 8px, #303030 16px);
+  border-left: 4px solid #858585;
+  padding: 10px;
+}
+.ho-box, .scenario-table, .secret-box, .forced-break, .trailer {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+.ho-box {
+  border: 1px solid #888;
+  background: #2a2a2a;
+  padding: 10px;
+}
+.scenario-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.scenario-table th, .scenario-table td {
+  border: 1px solid #666;
+  padding: 6px;
+}
+.secret-box {
+  background: #0f0f0f;
+  border: 1px solid #111;
+  color: transparent;
+  cursor: pointer;
+  padding: 10px;
+}
+.secret-box.open { color: #f2f2f2; }
+rt { color: #ff9b9b; }
+
+.dual-view .editor-panel, .dual-view .preview-panel { display: flex; }
+.dual-view .left-panel { display: block; }
+.editor-only { grid-template-columns: 320px 1fr; }
+.editor-only .preview-panel { display: none; }
+.preview-only { grid-template-columns: 320px 1fr; }
+.preview-only .editor-panel { display: none; }
+
+.toc-list { list-style: none; padding: 0; margin: 0; }
+.toc-list li {
+  padding: 4px 2px;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+}
+.toc-list li:hover { border-left-color: var(--accent); }
+
+#snippet-list { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; }
+#snippet-list li {
+  background: #1c1c1c;
+  border: 1px solid #444;
+  padding: 6px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+@media print {
+  body { background: white; color: black; }
+  .app-header, .left-panel, .editor-panel h2, .preview-panel h2 { display: none !important; }
+  .layout { display: block; height: auto; padding: 0; }
+  .preview-panel {
+    border: 0;
+    border-radius: 0;
+    background: white;
+  }
+  .preview-content {
+    border: 0;
+    overflow: visible;
+    column-count: 2;
+    column-gap: 24px;
+    text-align: justify;
+    padding: 0;
+  }
+  .trailer {
+    column-span: all;
+    margin-bottom: 16px;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 8px;
+  }
+  .trailer img {
+    width: 100%;
+    max-height: 240px;
+    object-fit: cover;
+    margin-bottom: 8px;
+  }
+  .forced-break {
+    break-before: page;
+    page-break-before: always;
+  }
+  @page { size: A4 portrait; margin: 14mm; }
+}
