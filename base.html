@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TRPGシナリオライター (Print-First)</title>
+  <title>シナリオライター (Print-First)</title>
   <style>
     :root {
       color-scheme: dark;
@@ -42,15 +42,6 @@
       padding: 0 16px;
       border-bottom: 1px solid var(--line);
       background: #0d0d0d;
-    }
-
-    .brand {
-      font-weight: 700;
-      letter-spacing: 0.05em;
-    }
-
-    .brand span {
-      color: var(--accent);
     }
 
     .button {
@@ -172,18 +163,33 @@
     }
 
     #print-target {
-      background: #f5f5f5;
+      background: transparent;
       color: #111;
-      max-width: 860px;
+      max-width: 950px;
       margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .print-page {
+      background: #fff;
+      width: 353mm;
+      min-height: 250mm;
       border: 1px solid #d1d1d1;
       box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+      margin: 0 auto;
+      padding: 12mm;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
 
     .print-header {
-      min-height: 220px;
-      background: #ddd center / cover no-repeat;
+      min-height: 62mm;
+      background: #000 center / cover no-repeat;
       position: relative;
+      margin-bottom: 8mm;
     }
 
     .print-header-overlay {
@@ -203,16 +209,23 @@
     }
 
     .print-body {
-      padding: 20px;
-      column-count: 2;
-      column-gap: 8mm;
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8mm;
+      overflow: hidden;
+    }
+
+    .column {
+      min-height: 0;
+      overflow: hidden;
       text-align: justify;
       line-height: 1.75;
       font-family: "Yu Mincho", "Hiragino Mincho ProN", serif;
       font-size: 10.5pt;
     }
 
-    .print-body p {
+    .column p {
       margin: 0 0 0.8em;
     }
 
@@ -225,6 +238,10 @@
       padding: 4px 10px;
       break-inside: avoid;
       page-break-inside: avoid;
+    }
+
+    .column > :first-child {
+      margin-top: 0 !important;
     }
 
     .read-aloud {
@@ -275,10 +292,16 @@
       page-break-inside: avoid;
     }
 
+    .page-break {
+      height: 0;
+      break-after: page;
+      page-break-after: always;
+    }
+
     @media print {
       @page {
-        size: A4 portrait;
-        margin: 14mm;
+        size: B4 portrait;
+        margin: 0;
       }
 
       body {
@@ -305,22 +328,22 @@
         margin: 0;
         border: 0;
         box-shadow: none;
-        background: #fff;
+        gap: 0;
       }
 
-      .print-header {
-        min-height: 70mm;
-        margin-bottom: 8mm;
-        break-after: avoid;
+      .print-page {
+        width: 353mm;
+        min-height: 250mm;
+        border: 0;
+        box-shadow: none;
+        margin: 0;
+        break-after: page;
+        page-break-after: always;
       }
 
-      .print-body {
-        padding: 0;
-        column-count: 2;
-        column-gap: 8mm;
-        text-align: justify;
-        widows: 2;
-        orphans: 2;
+      .print-page:last-child {
+        break-after: auto;
+        page-break-after: auto;
       }
 
       h3.scene-header,
@@ -329,6 +352,15 @@
       .print-body img {
         break-inside: avoid;
         page-break-inside: avoid;
+      }
+
+      .print-page,
+      .print-header,
+      h3.scene-header,
+      .data-box .label,
+      .read-aloud {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
       }
 
       .topbar,
@@ -343,7 +375,7 @@
 <body>
   <div class="app">
     <header class="topbar">
-      <div class="brand"><span>TRPG</span> Scenario Writer - Print First</div>
+      <div>Scenario Writer - Print First</div>
       <button class="button primary" id="print-btn">PDF化 / 印刷</button>
     </header>
 
@@ -402,14 +434,7 @@
           <button class="button" id="update-btn">プレビュー更新</button>
         </div>
         <div class="preview-scroll">
-          <div id="print-target">
-            <div id="print-header-bg" class="print-header">
-              <div class="print-header-overlay">
-                <h1 id="print-title-text">タイトル</h1>
-              </div>
-            </div>
-            <div id="print-body-content" class="print-body"></div>
-          </div>
+          <div id="print-target"></div>
         </div>
       </section>
     </main>
@@ -417,11 +442,9 @@
 
   <script>
     const editor = document.getElementById("editor");
-    const printBody = document.getElementById("print-body-content");
     const inpTitle = document.getElementById("inp-title");
     const inpImg = document.getElementById("inp-img");
-    const printTitleText = document.getElementById("print-title-text");
-    const printHeaderBg = document.getElementById("print-header-bg");
+    const printTarget = document.getElementById("print-target");
     const updateBtn = document.getElementById("update-btn");
     const printBtn = document.getElementById("print-btn");
 
@@ -445,40 +468,120 @@
 
     function parseScenarioText(raw) {
       const lines = raw.split("\n");
-      const html = [];
+      const blocks = [];
 
       for (const line of lines) {
         const text = line.trim();
         if (text === "") {
-          html.push("<p></p>");
+          blocks.push({ type: "html", html: "<p></p>" });
+          continue;
+        }
+
+        if (text === "---") {
+          blocks.push({ type: "page-break" });
           continue;
         }
 
         if (text.startsWith("# ")) {
-          html.push(`<h3 class="scene-header">${escapeHtml(text.slice(2))}</h3>`);
+          blocks.push({ type: "html", html: `<h3 class="scene-header">${escapeHtml(text.slice(2))}</h3>` });
           continue;
         }
 
         if (text.startsWith("> ")) {
-          html.push(`<div class="read-aloud">${escapeHtml(text.slice(2))}</div>`);
+          blocks.push({ type: "html", html: `<div class="read-aloud">${escapeHtml(text.slice(2))}</div>` });
           continue;
         }
 
         if (text.includes("{{HO1}}")) {
-          html.push(hoTemplate());
+          blocks.push({ type: "html", html: hoTemplate() });
           continue;
         }
 
-        html.push(`<p>${escapeHtml(text)}</p>`);
+        blocks.push({ type: "html", html: `<p>${escapeHtml(text)}</p>` });
       }
 
-      return html.join("\n");
+      return blocks;
+    }
+
+    function createPage(showHeader, title, imageUrl) {
+      const page = document.createElement("section");
+      page.className = "print-page";
+
+      if (showHeader) {
+        const header = document.createElement("div");
+        header.className = "print-header";
+        header.style.backgroundImage = imageUrl ? `url('${imageUrl}')` : "none";
+        const overlay = document.createElement("div");
+        overlay.className = "print-header-overlay";
+        const h1 = document.createElement("h1");
+        h1.textContent = title;
+        overlay.appendChild(h1);
+        header.appendChild(overlay);
+        page.appendChild(header);
+      }
+
+      const body = document.createElement("div");
+      body.className = "print-body";
+      const col1 = document.createElement("div");
+      col1.className = "column";
+      const col2 = document.createElement("div");
+      col2.className = "column";
+      body.append(col1, col2);
+      page.appendChild(body);
+
+      return { page, columns: [col1, col2] };
+    }
+
+    function fitsInColumn(column, node) {
+      column.appendChild(node);
+      const fits = column.scrollHeight <= column.clientHeight + 1;
+      if (!fits) {
+        node.remove();
+      }
+      return fits;
+    }
+
+    function renderPages(blocks) {
+      const title = inpTitle.value || "（無題シナリオ）";
+      const imageUrl = inpImg.value.trim();
+      printTarget.innerHTML = "";
+
+      let pageObj = createPage(true, title, imageUrl);
+      printTarget.appendChild(pageObj.page);
+      let colIndex = 0;
+
+      for (const block of blocks) {
+        if (block.type === "page-break") {
+          pageObj = createPage(false, title, imageUrl);
+          printTarget.appendChild(pageObj.page);
+          colIndex = 0;
+          continue;
+        }
+
+        const node = document.createElement("div");
+        node.innerHTML = block.html;
+        const element = node.firstElementChild;
+
+        if (!element) continue;
+
+        let placed = false;
+        while (!placed) {
+          if (fitsInColumn(pageObj.columns[colIndex], element)) {
+            placed = true;
+          } else if (colIndex === 0) {
+            colIndex = 1;
+          } else {
+            pageObj = createPage(false, title, imageUrl);
+            printTarget.appendChild(pageObj.page);
+            colIndex = 0;
+          }
+        }
+      }
     }
 
     function updatePreview() {
-      printTitleText.textContent = inpTitle.value || "（無題シナリオ）";
-      printHeaderBg.style.backgroundImage = inpImg.value ? `url('${inpImg.value}')` : "none";
-      printBody.innerHTML = parseScenarioText(editor.value);
+      const blocks = parseScenarioText(editor.value);
+      renderPages(blocks);
     }
 
     updateBtn.addEventListener("click", updatePreview);
