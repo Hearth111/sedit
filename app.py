@@ -1,225 +1,519 @@
+import json
+import os
+import re
+
 import flet as ft
-from reportlab.pdfgen import canvas
+from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.lib.units import mm
-import os
+from reportlab.platypus import (
+    BaseDocTemplate,
+    Frame,
+    NextPageTemplate,
+    PageTemplate,
+    Paragraph,
+    Spacer,
+    Table,
+    TableStyle,
+)
+
+RUBY_PATTERN = re.compile(r"\{(.+?)\}\((.+?)\)")
+
+
+def normalize_ruby(text: str) -> str:
+    return RUBY_PATTERN.sub(r"\1(\2)", text)
+
+
+def parse_blocks(text: str):
+    blocks = []
+    for raw_line in text.splitlines():
+        line = raw_line.rstrip()
+        stripped = line.strip()
+        if not stripped:
+            blocks.append(("blank", ""))
+        elif stripped.startswith("# "):
+            blocks.append(("heading", stripped[2:].strip()))
+        elif stripped.startswith(">"):
+            blocks.append(("quote", stripped[1:].strip()))
+        elif stripped.startswith("{{") and stripped.endswith("}}"):
+            blocks.append(("ho", stripped[2:-2].strip()))
+        elif stripped.startswith(":::secret") and stripped.endswith(":::"):
+            body = stripped[len(":::secret") : -3].strip()
+            blocks.append(("secret", body or "(secret)"))
+        else:
+            blocks.append(("paragraph", stripped))
+    return blocks
+
 
 def main(page: ft.Page):
-    # ■ 1. アプリ設定
-    page.title = "Shinobi-Writer (v0.2)"
+    page.title = "Shinobi-Writer (v0.3)"
     page.theme_mode = ft.ThemeMode.DARK
     page.padding = 10
-    page.window_width = 1400
-    page.window_height = 900
+    page.window_width = 1600
+    page.window_height = 920
     page.bgcolor = "#111111"
 
-    # フォント登録（前回と同じ）
     try:
-        pdfmetrics.registerFont(TTFont('Japanese', 'C:\\Windows\\Fonts\\meiryo.ttc'))
-    except:
+        pdfmetrics.registerFont(TTFont("Japanese", "C:\\Windows\\Fonts\\meiryo.ttc"))
+    except Exception:
         pass
 
-    # アプリの状態変数
     current_img_path = ""
+    current_project_path = ""
 
-    # ■ 2. 機能の実装
-
-    # 目次更新機能
-    def update_toc(e):
-        # 目次リストをクリア
-        toc_view.controls.clear()
-        
-        # 本文を行ごとに解析
-        lines = editor_field.value.split('\n')
-        for i, line in enumerate(lines):
-            line = line.strip()
-            if line.startswith('# '):
-                # 見出し (# )
-                toc_view.controls.append(
-                    ft.Container(
-                        content=ft.Text(f"■ {line.replace('# ', '')}", size=12, weight="bold", color="#dd0000"),
-                        padding=ft.padding.only(top=10, bottom=5),
-                        on_click=lambda _, pos=i: scroll_to_line(pos) # ジャンプ機能(簡易)
-                    )
-                )
-            elif line.startswith('## '):
-                # 小見出し (## )
-                toc_view.controls.append(
-                    ft.Container(
-                        content=ft.Text(f"  - {line.replace('## ', '')}", size=11, color="#aaaaaa"),
-                        padding=ft.padding.only(left=10, bottom=2),
-                        on_click=lambda _, pos=i: scroll_to_line(pos)
-                    )
-                )
-        toc_view.update()
-
-    # エディタのスクロール機能（現在はFletの制限で完全な行ジャンプは難しいが、枠組みだけ用意）
-    def scroll_to_line(line_index):
-        # 将来的にここにスクロール処理を実装
-        print(f"Jump to line: {line_index}")
-        page.snack_bar = ft.SnackBar(ft.Text(f"行ジャンプ: {line_index}行目 (機能開発中)"), bgcolor="#333")
+    def toast(message: str, color: str = "#2e7d32"):
+        page.snack_bar = ft.SnackBar(ft.Text(message), bgcolor=color)
         page.snack_bar.open = True
         page.update()
 
-    # 画像選択機能
+    def get_editor_text() -> str:
+        return editor_field.value or ""
+
+    def get_styles():
+        base = getSampleStyleSheet()["BodyText"]
+        base.fontName = "Japanese"
+        base.fontSize = 10
+        base.leading = 14
+
+        heading = ParagraphStyle(
+            "HeadingStyle",
+            parent=base,
+            fontSize=13,
+            leading=18,
+            textColor=colors.white,
+            backColor=colors.HexColor("#111111"),
+            borderPadding=(6, 8, 6),
+            leftIndent=0,
+            borderWidth=0,
+        )
+        quote = ParagraphStyle(
+            "QuoteStyle",
+            parent=base,
+            backColor=colors.HexColor("#eeeeee"),
+            textColor=colors.HexColor("#222222"),
+            borderPadding=(6, 8, 6),
+            leftIndent=6,
+            rightIndent=6,
+        )
+        normal = ParagraphStyle("NormalStyle", parent=base)
+        return heading, quote, normal
+
+    def build_story(text: str):
+        heading_style, quote_style, normal_style = get_styles()
+        story = [NextPageTemplate("Later")]
+        for block_type, body in parse_blocks(text):
+            body = normalize_ruby(body)
+            if block_type == "blank":
+                story.append(Spacer(1, 4 * mm))
+            elif block_type == "heading":
+                heading_tbl = Table(
+                    [[Paragraph(f"<b>{body}</b>", heading_style)]],
+                    colWidths=[170 * mm],
+                )
+                heading_tbl.setStyle(
+                    TableStyle(
+                        [
+                            ("BACKGROUND", (0, 0), (-1, -1), colors.black),
+                            ("TEXTCOLOR", (0, 0), (-1, -1), colors.white),
+                            ("BOX", (0, 0), (-1, -1), 0.5, colors.red),
+                            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                            ("TOPPADDING", (0, 0), (-1, -1), 6),
+                            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                        ]
+                    )
+                )
+                story.extend([heading_tbl, Spacer(1, 3 * mm)])
+            elif block_type == "quote":
+                story.extend([Paragraph(body, quote_style), Spacer(1, 2 * mm)])
+            elif block_type == "ho":
+                ho_tbl = Table([[Paragraph(f"HO: <b>{body}</b>", normal_style)]], colWidths=[170 * mm])
+                ho_tbl.setStyle(
+                    TableStyle(
+                        [
+                            ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#555555")),
+                            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f7f7f7")),
+                            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                            ("TOPPADDING", (0, 0), (-1, -1), 6),
+                            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                        ]
+                    )
+                )
+                story.extend([ho_tbl, Spacer(1, 2 * mm)])
+            elif block_type == "secret":
+                secret_tbl = Table([[Paragraph(f"SECRET: {body}", normal_style)]], colWidths=[170 * mm])
+                secret_tbl.setStyle(
+                    TableStyle(
+                        [
+                            ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#333333")),
+                            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#eeeeee")),
+                            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                            ("TOPPADDING", (0, 0), (-1, -1), 6),
+                            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                        ]
+                    )
+                )
+                story.extend([secret_tbl, Spacer(1, 2 * mm)])
+            else:
+                story.extend([Paragraph(body, normal_style), Spacer(1, 2 * mm)])
+        return story
+
+    def save_project(path: str):
+        nonlocal current_project_path
+        data = {
+            "title": title_field.value or "",
+            "text_content": get_editor_text(),
+            "header_image_path": current_img_path,
+        }
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        current_project_path = path
+        project_path_label.value = os.path.basename(path)
+        project_path_label.update()
+
+    def load_project(path: str):
+        nonlocal current_img_path, current_project_path
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        title_field.value = data.get("title", "")
+        editor_field.value = data.get("text_content", "")
+        current_img_path = data.get("header_image_path", "")
+
+        if current_img_path and os.path.exists(current_img_path):
+            img_preview.src = current_img_path
+            img_preview.visible = True
+            img_info.value = os.path.basename(current_img_path)
+        else:
+            current_img_path = ""
+            img_preview.src = ""
+            img_preview.visible = False
+            img_info.value = "画像未選択"
+
+        current_project_path = path
+        project_path_label.value = os.path.basename(path)
+        title_field.update()
+        editor_field.update()
+        img_preview.update()
+        img_info.update()
+        project_path_label.update()
+        update_toc(None)
+        update_preview()
+
+    def handle_project_save(e: ft.FilePickerResultEvent):
+        if e.path:
+            try:
+                save_project(e.path)
+                toast(f"プロジェクト保存: {e.path}")
+            except Exception as err:
+                toast(f"保存失敗: {err}", "#b71c1c")
+
+    def handle_project_load(e: ft.FilePickerResultEvent):
+        if e.files:
+            try:
+                load_project(e.files[0].path)
+                toast(f"プロジェクト読込: {e.files[0].path}")
+            except Exception as err:
+                toast(f"読込失敗: {err}", "#b71c1c")
+
     def on_img_picked(e: ft.FilePickerResultEvent):
         nonlocal current_img_path
         if e.files:
             file_path = e.files[0].path
             current_img_path = file_path
-            # プレビュー更新
             img_preview.src = file_path
             img_preview.visible = True
             img_info.value = os.path.basename(file_path)
             img_info.update()
             img_preview.update()
+            update_preview()
 
-    # 画像選択ダイアログ
-    img_picker = ft.FilePicker(on_result=on_img_picked)
-    page.overlay.append(img_picker)
+    def save_pdf_file(path: str):
+        doc = BaseDocTemplate(
+            path,
+            pagesize=A4,
+            leftMargin=12 * mm,
+            rightMargin=12 * mm,
+            topMargin=12 * mm,
+            bottomMargin=12 * mm,
+        )
+        width, height = A4
 
-    # PDF保存機能
+        first_frame = Frame(
+            12 * mm,
+            15 * mm,
+            width - 24 * mm,
+            height - 120 * mm,
+            id="first_frame",
+        )
+        gap = 6 * mm
+        col_w = (width - 24 * mm - gap) / 2
+        later_frame_l = Frame(12 * mm, 15 * mm, col_w, height - 27 * mm, id="col_left")
+        later_frame_r = Frame(12 * mm + col_w + gap, 15 * mm, col_w, height - 27 * mm, id="col_right")
+
+        def draw_first_page(c, _):
+            c.saveState()
+            c.setFillColor(colors.HexColor("#111111"))
+            c.rect(0, 0, width, height, fill=1, stroke=0)
+            y = height - 15 * mm
+            if current_img_path and os.path.exists(current_img_path):
+                try:
+                    img_w = width - 24 * mm
+                    img_h = 70 * mm
+                    c.drawImage(current_img_path, 12 * mm, y - img_h, width=img_w, height=img_h, preserveAspectRatio=True, anchor='n')
+                    y -= img_h + 8 * mm
+                except Exception:
+                    pass
+            c.setFillColor(colors.white)
+            c.setFont("Helvetica-Bold", 22)
+            c.drawString(15 * mm, y, title_field.value or "No Title")
+            c.restoreState()
+
+        def draw_later_page(c, _):
+            c.saveState()
+            c.setFillColor(colors.HexColor("#111111"))
+            c.rect(0, 0, width, height, fill=1, stroke=0)
+            c.restoreState()
+
+        doc.addPageTemplates(
+            [
+                PageTemplate(id="First", frames=[first_frame], onPage=draw_first_page),
+                PageTemplate(id="Later", frames=[later_frame_l, later_frame_r], onPage=draw_later_page),
+            ]
+        )
+
+        story = build_story(get_editor_text())
+        doc.build(story)
+
     def save_pdf(e: ft.FilePickerResultEvent):
-        save_path = e.path
-        if save_path:
+        if e.path:
             try:
-                c = canvas.Canvas(save_path, pagesize=A4)
-                width, height = A4
-                
-                # 日本語フォント設定
-                try: c.setFont("Japanese", 10)
-                except: pass
-
-                # --- 1ページ目の描画 ---
-                cursor_y = height - 20*mm
-                
-                # 画像描画 (選択されていたら)
-                if current_img_path:
-                    try:
-                        # 画像を上部に描画 (幅いっぱい、高さアスペクト維持は省略して固定)
-                        c.drawImage(current_img_path, 20*mm, height - 100*mm, width=170*mm, height=80*mm, preserveAspectRatio=True)
-                        cursor_y -= 90*mm
-                    except:
-                        pass
-
-                # タイトル描画
-                c.setFont("Japanese", 24)
-                c.drawString(20*mm, cursor_y, title_field.value)
-                cursor_y -= 15*mm
-
-                # --- 本文描画 (簡易) ---
-                c.setFont("Japanese", 10)
-                text = editor_field.value
-                for line in text.split('\n'):
-                    if cursor_y < 20*mm:
-                        c.showPage()
-                        cursor_y = height - 20*mm
-                        try: c.setFont("Japanese", 10)
-                        except: pass
-                    
-                    c.drawString(20*mm, cursor_y, line)
-                    cursor_y -= 6*mm
-
-                c.save()
-                page.snack_bar = ft.SnackBar(ft.Text(f"保存しました: {save_path}"), bgcolor="green")
-                page.snack_bar.open = True
-                page.update()
+                save_pdf_file(e.path)
+                toast(f"PDF保存: {e.path}")
             except Exception as err:
-                page.snack_bar = ft.SnackBar(ft.Text(f"エラー: {err}"), bgcolor="red")
-                page.snack_bar.open = True
-                page.update()
+                toast(f"PDF保存失敗: {err}", "#b71c1c")
 
-    save_dialog = ft.FilePicker(on_result=save_pdf)
-    page.overlay.append(save_dialog)
+    def scroll_to_line(line_index):
+        toast(f"行ジャンプ: {line_index + 1}行目", "#424242")
 
-    # ■ 3. UIコンポーネント作成
+    def update_toc(_):
+        toc_view.controls.clear()
+        lines = get_editor_text().split("\n")
+        for i, line in enumerate(lines):
+            text = line.strip()
+            if text.startswith("# "):
+                toc_view.controls.append(
+                    ft.Container(
+                        content=ft.Text(f"■ {text[2:]}", size=12, weight="bold", color="#dd0000"),
+                        padding=ft.padding.only(top=8, bottom=4),
+                        on_click=lambda _, pos=i: scroll_to_line(pos),
+                    )
+                )
+            elif text.startswith("## "):
+                toc_view.controls.append(
+                    ft.Container(
+                        content=ft.Text(f"  - {text[3:]}", size=11, color="#aaaaaa"),
+                        padding=ft.padding.only(left=10, bottom=2),
+                        on_click=lambda _, pos=i: scroll_to_line(pos),
+                    )
+                )
+        toc_view.update()
 
-    # [左カラム] 目次・ツール
-    toc_view = ft.Column(scroll=ft.ScrollMode.AUTO)
-    left_col = ft.Container(
-        content=ft.Column([
-            ft.Text("INDEX", size=12, weight="bold", color="#555"),
-            ft.Divider(color="#333"),
-            toc_view
-        ]),
-        bgcolor="#161616",
-        padding=10,
-        border=ft.border.only(right=ft.BorderSide(1, "#333"))
+    def apply_insert(snippet: str, line_start: bool = False):
+        value = get_editor_text()
+        selection = getattr(editor_field, "selection", None)
+        start = len(value)
+        end = len(value)
+        if selection is not None:
+            start = getattr(selection, "start", start)
+            end = getattr(selection, "end", end)
+        start = max(0, min(start, len(value)))
+        end = max(0, min(end, len(value)))
+
+        if line_start:
+            line_head = value.rfind("\n", 0, start) + 1
+            editor_field.value = value[:line_head] + snippet + value[line_head:]
+        else:
+            editor_field.value = value[:start] + snippet + value[end:]
+        editor_field.update()
+        update_toc(None)
+        update_preview()
+
+    def update_preview():
+        preview_column.controls.clear()
+        preview_column.controls.append(ft.Text(title_field.value or "(タイトル未設定)", size=22, weight="bold", color="white"))
+        if current_img_path and os.path.exists(current_img_path):
+            preview_column.controls.append(
+                ft.Image(src=current_img_path, height=140, fit=ft.ImageFit.COVER)
+            )
+        preview_column.controls.append(ft.Divider(color="#333"))
+
+        for block_type, body in parse_blocks(get_editor_text()):
+            body = normalize_ruby(body)
+            if block_type == "blank":
+                preview_column.controls.append(ft.Container(height=8))
+            elif block_type == "heading":
+                preview_column.controls.append(
+                    ft.Container(
+                        content=ft.Text(body, color="white", weight="bold"),
+                        bgcolor="#000000",
+                        border=ft.border.only(left=ft.BorderSide(3, "#ff0000")),
+                        padding=8,
+                    )
+                )
+            elif block_type == "quote":
+                preview_column.controls.append(
+                    ft.Container(content=ft.Text(body, color="#222"), bgcolor="#dddddd", padding=8, border_radius=4)
+                )
+            elif block_type == "ho":
+                preview_column.controls.append(
+                    ft.Container(
+                        content=ft.Text(f"HO: {body}", color="#eee"),
+                        border=ft.border.all(1, "#888"),
+                        padding=8,
+                    )
+                )
+            elif block_type == "secret":
+                preview_column.controls.append(
+                    ft.Container(
+                        content=ft.Text(f"SECRET: {body}", color="#111"),
+                        bgcolor="#cccccc",
+                        border=ft.border.all(1, "#666"),
+                        padding=8,
+                    )
+                )
+            else:
+                preview_column.controls.append(ft.Text(body, color="#ddd"))
+        preview_column.update()
+
+    def on_editor_change(_):
+        update_toc(None)
+        update_preview()
+
+    def save_project_shortcut():
+        if current_project_path:
+            try:
+                save_project(current_project_path)
+                toast(f"上書き保存: {current_project_path}")
+            except Exception as err:
+                toast(f"保存失敗: {err}", "#b71c1c")
+        else:
+            project_save_picker.save_file(file_name=f"{title_field.value or 'project'}.json")
+
+    def on_keyboard(e: ft.KeyboardEvent):
+        if getattr(e, "ctrl", False) and str(getattr(e, "key", "")).lower() == "s":
+            save_project_shortcut()
+
+    page.on_keyboard_event = on_keyboard
+
+    img_picker = ft.FilePicker(on_result=on_img_picked)
+    pdf_save_dialog = ft.FilePicker(on_result=save_pdf)
+    project_save_picker = ft.FilePicker(on_result=handle_project_save)
+    project_load_picker = ft.FilePicker(on_result=handle_project_load)
+    page.overlay.extend([img_picker, pdf_save_dialog, project_save_picker, project_load_picker])
+
+    toc_view = ft.Column(scroll=ft.ScrollMode.AUTO, height=220)
+
+    title_field = ft.TextField(
+        label="タイトル",
+        bgcolor="#222",
+        border_color="#444",
+        text_size=12,
+        on_change=lambda _: update_preview(),
     )
-
-    # [中カラム] エディタ
     editor_field = ft.TextField(
         multiline=True,
         min_lines=40,
         text_size=14,
         bgcolor="#111",
         color="#ddd",
-        border_color="transparent", # 枠線を消して没入感アップ
+        border_color="transparent",
         cursor_color="#d00",
         hint_text="# タイトル\n\n> ここに描写を書く...",
-        on_change=update_toc, # 文字入力のたびに目次更新
-        expand=True
+        on_change=on_editor_change,
+        expand=True,
     )
 
-    # [右カラム] 設定・情報
-    title_field = ft.TextField(label="タイトル", bgcolor="#222", border_color="#444", text_size=12)
-    
     img_preview = ft.Image(src="", width=200, height=120, fit=ft.ImageFit.CONTAIN, visible=False)
     img_info = ft.Text("画像未選択", size=10, color="#666")
-    
-    img_btn = ft.ElevatedButton(
-        "画像を選択", 
-        icon=ft.icons.IMAGE,
-        style=ft.ButtonStyle(bgcolor="#333", color="white"),
-        on_click=lambda _: img_picker.pick_files(allow_multiple=False, allowed_extensions=["png", "jpg", "jpeg"])
+    project_path_label = ft.Text("未保存", size=10, color="#888")
+
+    snippet_buttons = ft.Column(
+        [
+            ft.Text("スニペット", size=12, weight="bold", color="#aaa"),
+            ft.ElevatedButton("シーン表", on_click=lambda _: apply_insert("{{SceneTable}}")),
+            ft.ElevatedButton("HO枠", on_click=lambda _: apply_insert("{{HO1}}")),
+            ft.ElevatedButton("描写ボックス", on_click=lambda _: apply_insert("> ", line_start=True)),
+            ft.ElevatedButton("袋とじ", on_click=lambda _: apply_insert(":::secret 内容 :::")),
+            ft.ElevatedButton("ルビ", on_click=lambda _: apply_insert("{漢字}(よみ)")),
+        ],
+        spacing=6,
     )
 
-    save_btn = ft.ElevatedButton(
-        "PDF保存", 
-        icon=ft.icons.SAVE_ALT,
-        style=ft.ButtonStyle(bgcolor="#d00", color="white", shape=ft.RoundedRectangleBorder(radius=4)),
-        on_click=lambda _: save_dialog.save_file(file_name=f"{title_field.value}.pdf")
-    )
-
-    right_col = ft.Container(
-        content=ft.Column([
-            ft.Text("SETTINGS", size=12, weight="bold", color="#555"),
-            ft.Divider(color="#333"),
-            title_field,
-            ft.Container(height=10),
-            ft.Text("トレーラー画像", size=11, color="#aaa"),
-            ft.Container(
-                content=img_preview,
-                bgcolor="#000",
-                alignment=ft.alignment.center,
-                border=ft.border.all(1, "#333"),
-                height=120
-            ),
-            ft.Row([img_info, img_btn], alignment="spaceBetween"),
-            ft.Divider(color="#333"),
-            ft.Container(content=save_btn, padding=ft.padding.only(top=20))
-        ]),
+    left_col = ft.Container(
+        content=ft.Column(
+            [
+                ft.Text("TOOLS", size=12, weight="bold", color="#555"),
+                ft.Divider(color="#333"),
+                title_field,
+                ft.Row(
+                    [
+                        ft.ElevatedButton("JSON保存", on_click=lambda _: project_save_picker.save_file(file_name=f"{title_field.value or 'project'}.json")),
+                        ft.ElevatedButton("JSON読込", on_click=lambda _: project_load_picker.pick_files(allow_multiple=False, allowed_extensions=["json"])),
+                    ]
+                ),
+                ft.Text("現在のプロジェクト", size=10, color="#777"),
+                project_path_label,
+                ft.Divider(color="#333"),
+                ft.Text("ヘッダー画像", size=11, color="#aaa"),
+                ft.Container(content=img_preview, bgcolor="#000", alignment=ft.alignment.center, border=ft.border.all(1, "#333"), height=120),
+                ft.Row(
+                    [
+                        img_info,
+                        ft.IconButton(icon=ft.icons.IMAGE, on_click=lambda _: img_picker.pick_files(allow_multiple=False, allowed_extensions=["png", "jpg", "jpeg"])),
+                    ],
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                ),
+                ft.ElevatedButton("PDF保存", icon=ft.icons.SAVE_ALT, on_click=lambda _: pdf_save_dialog.save_file(file_name=f"{title_field.value or 'output'}.pdf")),
+                ft.Divider(color="#333"),
+                snippet_buttons,
+                ft.Divider(color="#333"),
+                ft.Text("INDEX", size=12, weight="bold", color="#555"),
+                toc_view,
+            ],
+            scroll=ft.ScrollMode.AUTO,
+        ),
         bgcolor="#161616",
         padding=10,
-        border=ft.border.only(left=ft.BorderSide(1, "#333"))
+        border=ft.border.only(right=ft.BorderSide(1, "#333")),
     )
 
-    # ■ 4. レイアウト配置 (3カラム)
+    preview_column = ft.Column(scroll=ft.ScrollMode.AUTO)
+    right_col = ft.Container(
+        content=ft.Column([ft.Text("PREVIEW", size=12, weight="bold", color="#555"), ft.Divider(color="#333"), preview_column]),
+        bgcolor="#161616",
+        padding=10,
+        border=ft.border.only(left=ft.BorderSide(1, "#333")),
+    )
+
     page.add(
         ft.Row(
             [
-                ft.Container(content=left_col, expand=2),  # 左 (20%)
-                ft.Container(content=editor_field, expand=6, padding=20), # 中 (60%)
-                ft.Container(content=right_col, expand=2)  # 右 (20%)
+                ft.Container(content=left_col, expand=3),
+                ft.Container(content=editor_field, expand=5, padding=20),
+                ft.Container(content=right_col, expand=4),
             ],
             expand=True,
-            spacing=0 # 隙間なく配置
+            spacing=0,
         )
     )
 
-    # 初期更新
     update_toc(None)
+    update_preview()
+
 
 ft.app(target=main)
