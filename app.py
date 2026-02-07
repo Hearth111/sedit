@@ -414,9 +414,12 @@ def main(page: ft.Page):
                 preview_column.controls.append(ft.Text(body, color="#333"))
         preview_column.update()
 
-    def on_editor_change(_):
+    def refresh_editor_views():
         update_toc(None)
         update_preview()
+
+    def on_editor_blur(_):
+        refresh_editor_views()
 
     def save_project_shortcut():
         if current_project_path:
@@ -429,8 +432,13 @@ def main(page: ft.Page):
             project_save_picker.save_file(file_name=f"{title_field.value or 'project'}.json")
 
     def on_keyboard(e: ft.KeyboardEvent):
-        if getattr(e, "ctrl", False) and str(getattr(e, "key", "")).lower() == "s":
+        ctrl_pressed = getattr(e, "ctrl", False)
+        key = str(getattr(e, "key", "")).lower()
+        if ctrl_pressed and key == "s":
             save_project_shortcut()
+        elif ctrl_pressed and key == "r":
+            refresh_editor_views()
+            toast("プレビュー更新", "#424242")
 
     page.on_keyboard_event = on_keyboard
 
@@ -458,7 +466,7 @@ def main(page: ft.Page):
         border_color="#e3e3e3",
         cursor_color="#555",
         hint_text="# タイトル\n\n> ここに描写を書く...",
-        on_change=on_editor_change,
+        on_blur=on_editor_blur,
         expand=True,
     )
 
@@ -505,6 +513,9 @@ def main(page: ft.Page):
                 ft.ElevatedButton("PDF保存", icon=ft.icons.SAVE_ALT, on_click=lambda _: pdf_save_dialog.save_file(file_name=f"{title_field.value or 'output'}.pdf")),
                 ft.Divider(color="#ddd"),
                 snippet_buttons,
+                ft.Divider(color="#ddd"),
+                ft.ElevatedButton("プレビュー更新", on_click=lambda _: refresh_editor_views()),
+                ft.Text("※入力中はプレビュー更新を抑制しています（Ctrl+R でも更新可能）", size=10, color="#888"),
                 ft.Divider(color="#ddd"),
                 ft.Text("INDEX", size=12, weight="bold", color="#888"),
                 toc_view,
