@@ -7,6 +7,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
@@ -50,16 +51,38 @@ def parse_blocks(text: str):
 
 def main(page: ft.Page):
     page.title = "Shinobi-Writer (v0.3)"
-    page.theme_mode = ft.ThemeMode.DARK
+    page.theme_mode = ft.ThemeMode.LIGHT
     page.padding = 10
     page.window_width = 1600
     page.window_height = 920
-    page.bgcolor = "#111111"
+    page.bgcolor = "#f6f6f6"
 
-    try:
-        pdfmetrics.registerFont(TTFont("Japanese", "C:\\Windows\\Fonts\\meiryo.ttc"))
-    except Exception:
-        pass
+    pdf_font_name = "Helvetica"
+
+    font_candidates = [
+        "C:\\Windows\\Fonts\\meiryo.ttc",
+        "C:\\Windows\\Fonts\\msgothic.ttc",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+        "/Library/Fonts/Arial Unicode.ttf",
+    ]
+
+    for candidate in font_candidates:
+        if os.path.exists(candidate):
+            try:
+                pdfmetrics.registerFont(TTFont("Japanese", candidate))
+                pdf_font_name = "Japanese"
+                break
+            except Exception:
+                continue
+
+    if pdf_font_name != "Japanese":
+        try:
+            pdfmetrics.registerFont(UnicodeCIDFont("HeiseiKakuGo-W5"))
+            pdf_font_name = "HeiseiKakuGo-W5"
+        except Exception:
+            pass
 
     current_img_path = ""
     current_project_path = ""
@@ -74,7 +97,7 @@ def main(page: ft.Page):
 
     def get_styles():
         base = getSampleStyleSheet()["BodyText"]
-        base.fontName = "Japanese"
+        base.fontName = pdf_font_name
         base.fontSize = 10
         base.leading = 14
 
@@ -83,8 +106,8 @@ def main(page: ft.Page):
             parent=base,
             fontSize=13,
             leading=18,
-            textColor=colors.white,
-            backColor=colors.HexColor("#111111"),
+            textColor=colors.HexColor("#111111"),
+            backColor=colors.HexColor("#f4f4f4"),
             borderPadding=(6, 8, 6),
             leftIndent=0,
             borderWidth=0,
@@ -116,9 +139,9 @@ def main(page: ft.Page):
                 heading_tbl.setStyle(
                     TableStyle(
                         [
-                            ("BACKGROUND", (0, 0), (-1, -1), colors.black),
-                            ("TEXTCOLOR", (0, 0), (-1, -1), colors.white),
-                            ("BOX", (0, 0), (-1, -1), 0.5, colors.red),
+                            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f4f4f4")),
+                            ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#111111")),
+                            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#dadada")),
                             ("LEFTPADDING", (0, 0), (-1, -1), 6),
                             ("RIGHTPADDING", (0, 0), (-1, -1), 6),
                             ("TOPPADDING", (0, 0), (-1, -1), 6),
@@ -257,7 +280,7 @@ def main(page: ft.Page):
 
         def draw_first_page(c, _):
             c.saveState()
-            c.setFillColor(colors.HexColor("#111111"))
+            c.setFillColor(colors.white)
             c.rect(0, 0, width, height, fill=1, stroke=0)
             y = height - 15 * mm
             if current_img_path and os.path.exists(current_img_path):
@@ -268,14 +291,14 @@ def main(page: ft.Page):
                     y -= img_h + 8 * mm
                 except Exception:
                     pass
-            c.setFillColor(colors.white)
-            c.setFont("Helvetica-Bold", 22)
+            c.setFillColor(colors.HexColor("#111111"))
+            c.setFont(pdf_font_name, 22)
             c.drawString(15 * mm, y, title_field.value or "No Title")
             c.restoreState()
 
         def draw_later_page(c, _):
             c.saveState()
-            c.setFillColor(colors.HexColor("#111111"))
+            c.setFillColor(colors.white)
             c.rect(0, 0, width, height, fill=1, stroke=0)
             c.restoreState()
 
@@ -345,12 +368,12 @@ def main(page: ft.Page):
 
     def update_preview():
         preview_column.controls.clear()
-        preview_column.controls.append(ft.Text(title_field.value or "(タイトル未設定)", size=22, weight="bold", color="white"))
+        preview_column.controls.append(ft.Text(title_field.value or "(タイトル未設定)", size=22, weight="bold", color="#111"))
         if current_img_path and os.path.exists(current_img_path):
             preview_column.controls.append(
                 ft.Image(src=current_img_path, height=140, fit=ft.ImageFit.COVER)
             )
-        preview_column.controls.append(ft.Divider(color="#333"))
+        preview_column.controls.append(ft.Divider(color="#ddd"))
 
         for block_type, body in parse_blocks(get_editor_text()):
             body = normalize_ruby(body)
@@ -359,9 +382,9 @@ def main(page: ft.Page):
             elif block_type == "heading":
                 preview_column.controls.append(
                     ft.Container(
-                        content=ft.Text(body, color="white", weight="bold"),
-                        bgcolor="#000000",
-                        border=ft.border.only(left=ft.BorderSide(3, "#ff0000")),
+                        content=ft.Text(body, color="#111", weight="bold"),
+                        bgcolor="#f8f8f8",
+                        border=ft.border.only(left=ft.BorderSide(3, "#666")),
                         padding=8,
                     )
                 )
@@ -372,8 +395,9 @@ def main(page: ft.Page):
             elif block_type == "ho":
                 preview_column.controls.append(
                     ft.Container(
-                        content=ft.Text(f"HO: {body}", color="#eee"),
+                        content=ft.Text(f"HO: {body}", color="#333"),
                         border=ft.border.all(1, "#888"),
+                        bgcolor="#f6f6f6",
                         padding=8,
                     )
                 )
@@ -387,7 +411,7 @@ def main(page: ft.Page):
                     )
                 )
             else:
-                preview_column.controls.append(ft.Text(body, color="#ddd"))
+                preview_column.controls.append(ft.Text(body, color="#333"))
         preview_column.update()
 
     def on_editor_change(_):
@@ -420,8 +444,8 @@ def main(page: ft.Page):
 
     title_field = ft.TextField(
         label="タイトル",
-        bgcolor="#222",
-        border_color="#444",
+        bgcolor="#ffffff",
+        border_color="#d8d8d8",
         text_size=12,
         on_change=lambda _: update_preview(),
     )
@@ -429,10 +453,10 @@ def main(page: ft.Page):
         multiline=True,
         min_lines=40,
         text_size=14,
-        bgcolor="#111",
-        color="#ddd",
-        border_color="transparent",
-        cursor_color="#d00",
+        bgcolor="#ffffff",
+        color="#222",
+        border_color="#e3e3e3",
+        cursor_color="#555",
         hint_text="# タイトル\n\n> ここに描写を書く...",
         on_change=on_editor_change,
         expand=True,
@@ -457,8 +481,8 @@ def main(page: ft.Page):
     left_col = ft.Container(
         content=ft.Column(
             [
-                ft.Text("TOOLS", size=12, weight="bold", color="#555"),
-                ft.Divider(color="#333"),
+                ft.Text("TOOLS", size=12, weight="bold", color="#888"),
+                ft.Divider(color="#ddd"),
                 title_field,
                 ft.Row(
                     [
@@ -468,9 +492,9 @@ def main(page: ft.Page):
                 ),
                 ft.Text("現在のプロジェクト", size=10, color="#777"),
                 project_path_label,
-                ft.Divider(color="#333"),
+                ft.Divider(color="#ddd"),
                 ft.Text("ヘッダー画像", size=11, color="#aaa"),
-                ft.Container(content=img_preview, bgcolor="#000", alignment=ft.alignment.center, border=ft.border.all(1, "#333"), height=120),
+                ft.Container(content=img_preview, bgcolor="#fff", alignment=ft.alignment.center, border=ft.border.all(1, "#ddd"), height=120),
                 ft.Row(
                     [
                         img_info,
@@ -479,32 +503,32 @@ def main(page: ft.Page):
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 ),
                 ft.ElevatedButton("PDF保存", icon=ft.icons.SAVE_ALT, on_click=lambda _: pdf_save_dialog.save_file(file_name=f"{title_field.value or 'output'}.pdf")),
-                ft.Divider(color="#333"),
+                ft.Divider(color="#ddd"),
                 snippet_buttons,
-                ft.Divider(color="#333"),
-                ft.Text("INDEX", size=12, weight="bold", color="#555"),
+                ft.Divider(color="#ddd"),
+                ft.Text("INDEX", size=12, weight="bold", color="#888"),
                 toc_view,
             ],
             scroll=ft.ScrollMode.AUTO,
         ),
-        bgcolor="#161616",
+        bgcolor="#fafafa",
         padding=10,
-        border=ft.border.only(right=ft.BorderSide(1, "#333")),
+        border=ft.border.only(right=ft.BorderSide(1, "#e1e1e1")),
     )
 
     preview_column = ft.Column(scroll=ft.ScrollMode.AUTO)
     right_col = ft.Container(
-        content=ft.Column([ft.Text("PREVIEW", size=12, weight="bold", color="#555"), ft.Divider(color="#333"), preview_column]),
-        bgcolor="#161616",
+        content=ft.Column([ft.Text("PREVIEW", size=12, weight="bold", color="#888"), ft.Divider(color="#ddd"), preview_column]),
+        bgcolor="#fafafa",
         padding=10,
-        border=ft.border.only(left=ft.BorderSide(1, "#333")),
+        border=ft.border.only(left=ft.BorderSide(1, "#e1e1e1")),
     )
 
     page.add(
         ft.Row(
             [
                 ft.Container(content=left_col, expand=3),
-                ft.Container(content=editor_field, expand=5, padding=20),
+                ft.Container(content=editor_field, expand=7, padding=20),
                 ft.Container(content=right_col, expand=4),
             ],
             expand=True,
