@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shinobi-Writer (Print Only Ver)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;700&display=swap');
+
+    /* --------------------------------------------------
+       画面表示用 (Screen CSS)
+       - 暗くてカッコいいエディタ画面
+       - プレビューは「ただの巻物」として表示
+       -------------------------------------------------- */
+    body {
+        background-color: #111;
+        color: #ddd;
+        height: 100vh;
+        overflow: hidden;
+        font-family: sans-serif;
+    }
+
+    /* エディタエリア */
+    textarea#editor {
+        font-family: "Menlo", "Consolas", monospace;
+        line-height: 1.8;
+        background-color: #1a1a1a;
+        color: #eee;
+        border: none;
+        padding: 20px;
+        width: 100%;
+        height: 100%;
+        resize: none;
+        outline: none;
+    }
+
+    /* 画面上の簡易プレビュー（印刷結果とは別物！） */
+    .screen-preview {
+        background: #222;
+        padding: 40px;
+        overflow-y: auto;
+        color: #aaa;
+        font-family: 'Shippori Mincho', serif;
+    }
+    .screen-preview .warning {
+        background: #d00; color: white; padding: 5px 10px; font-size: 0.8em; margin-bottom: 20px;
+        border-radius: 4px; display: inline-block;
+    }
+    .screen-preview-content {
+        max-width: 800px;
+        margin: 0 auto;
+        line-height: 1.8;
+    }
+
+    /* --------------------------------------------------
+       印刷用 (Print CSS) ★ここが本番★
+       - 印刷ダイアログが開いたときだけ適用される
+       - ここで「A4 2段組」を強制する
+       -------------------------------------------------- */
+    @media print {
+        /* 全要素を一旦非表示に */
+        body * { visibility: hidden; }
+        
+        /* プレビューの中身だけを表示 */
+        #print-target, #print-target * { visibility: visible; }
+        
+        /* 印刷設定 */
+        @page {
+            size: A4;
+            margin: 15mm; /* 上下左右の余白 */
+        }
+
+        body {
+            background: white;
+            color: black;
+            font-family: 'Shippori Mincho', serif;
+        }
+
+        /* 印刷対象のコンテナを絶対配置でリセット */
+        #print-target {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* -----------------------
+           レイアウトの魔法
+           ----------------------- */
+        
+        /* 1ページ目：タイトルエリア（段抜き） */
+        .print-header {
+            width: 100%;
+            height: 250px; /* 画像エリア */
+            background-color: #eee; /* 画像がない場合のグレー */
+            margin-bottom: 10mm;
+            position: relative;
+            background-size: cover;
+            background-position: center;
+            /* column-span: all; はChromeでバグりやすいので、配置順で制御 */
+        }
+        
+        /* 本文：2段組 */
+        .print-body {
+            column-count: 2;        /* 2段組にする */
+            column-gap: 8mm;        /* 間の隙間 */
+            column-rule: 0.5px solid #ccc; /* 真ん中の線 */
+            text-align: justify;    /* 両端揃え */
+            widows: 2; orphans: 2;  /* 改ページ時の孤立行対策 */
+        }
+
+        /* -----------------------
+           崩れ防止 (Break-inside Avoid)
+           ----------------------- */
+        /* これをつけると「箱の途中」でページや段が切れなくなる */
+        h3, .data-box, .read-aloud, img {
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }
+
+        /* 見出しデザイン */
+        h3.scene-header {
+            background: black;
+            color: white;
+            padding: 3px 10px;
+            font-size: 14pt;
+            font-weight: bold;
+            margin-top: 2em; /* 前の要素との間隔 */
+            margin-bottom: 1em;
+            border-left: 6px solid #d00; /* 赤アクセント */
+        }
+
+        /* 最初の見出しだけ上を詰める */
+        h3.scene-header:first-of-type { margin-top: 0; }
+        
+        /* 描写ボックス */
+        .read-aloud {
+            background: #f0f0f0;
+            border: 1px solid #888;
+            padding: 10px;
+            margin: 10px 0;
+            font-size: 10pt;
+        }
+    }
+
+    /* エディタ画面での見出し等の見た目（簡易） */
+    h3.scene-header { font-weight: bold; color: #d00; margin-top: 1em; border-left: 4px solid #d00; padding-left: 8px;}
+    .read-aloud { color: #aaa; border-left: 2px solid #555; padding-left: 10px; margin: 10px 0; font-style: italic;}
+
+</style>
+</head>
+<body class="flex flex-col h-screen">
+
+    <header class="h-12 bg-[#0a0a0a] border-b border-[#333] flex items-center justify-between px-4 shrink-0">
+        <div class="text-sm font-bold tracking-wider text-white"><span class="text-[#d00]">忍</span> HTML-Writer</div>
+        <div class="flex gap-2">
+            <button onclick="window.print()" class="bg-[#d00] hover:bg-red-700 text-white px-4 py-1 rounded text-sm font-bold shadow-lg transition">
+                <i class="fas fa-print mr-2"></i>PDF化 / 印刷
+            </button>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+        
+        <div class="w-[250px] bg-[#1a1a1a] border-r border-[#333] p-4 flex flex-col gap-4 shrink-0 overflow-y-auto">
+            <div>
+                <label class="text-xs text-gray-500 font-bold block mb-1">SCENARIO TITLE</label>
+                <input id="inp-title" type="text" class="w-full bg-[#111] border border-[#444] text-sm p-2 text-white" value="影の追跡者">
+            </div>
+            <div>
+                <label class="text-xs text-gray-500 font-bold block mb-1">HEADER IMAGE URL</label>
+                <input id="inp-img" type="text" class="w-full bg-[#111] border border-[#444] text-xs p-2 text-gray-400" placeholder="https://..." value="https://placehold.co/800x300/333/FFF?text=SHINOBI">
+            </div>
+            <div class="border-t border-[#333] pt-4">
+                <p class="text-[10px] text-gray-500 mb-2">使い方：<br>1. エディタに文章を書く<br>2. 右上の「PDF化」ボタンを押す<br>3. 印刷画面で「送信先: PDFに保存」を選ぶ<br><br>※画面上は2段組になりませんが、印刷時に自動で整形されます。</p>
+            </div>
+        </div>
+
+        <div class="flex-1 bg-[#1a1a1a] border-r border-[#333] relative">
+            <textarea id="editor" spellcheck="false"># 導入フェイズ
+
+> 降りしきる雨の中、PC1は路地に佇んでいた。
+> 「お前が……ターゲットか」
+
+背後から声がかかる。
+これはHTMLだけで作られたエディタのテストである。
+
+# シーン1：接触
+
+2段組のテストを行う。
+文章を長く書いて、印刷プレビューでどう見えるか確認してほしい。
+ブラウザの「印刷」機能は非常に賢く、CSSで `column-count: 2` を指定するだけで、自動的に文字を折り返して配置してくれる。
+
+(以下、テキスト量産用)
+あいうえお、かきくけこ。さしすせそ。
+あいうえお、かきくけこ。さしすせそ。
+あいうえお、かきくけこ。さしすせそ。
+あいうえお、かきくけこ。さしすせそ。
+あいうえお、かきくけこ。さしすせそ。
+あいうえお、かきくけこ。さしすせそ。
+
+{{HO1}}
+
+# メインフェイズ
+
+シーン表を振ってください。
+ここからは戦闘処理が入る。
+
+あいうえお、かきくけこ。さしすせそ。
+あいうえお、かきくけこ。さしすせそ。
+あいうえお、かきくけこ。さしすせそ。
+あいうえお、かきくけこ。さしすせそ。
+
+> 敵忍法、発動！
+
+# クライマックスフェイズ
+
+ボスが登場する。
+ここまでのテキストが長ければ、自動的に次のページに送られているはずだ。
+HTMLとCSSだけで、ここまで綺麗な組版ができるのだ。
+
+あいうえお、かきくけこ。さしすせそ。
+あいうえお、かきくけこ。さしすせそ。</textarea>
+        </div>
+
+        <div class="flex-1 bg-[#222] overflow-y-auto screen-preview">
+            <div class="warning">⚠️ 実際のレイアウトは「PDF化」ボタンを押して確認してください</div>
+            
+            <div id="print-target">
+                <div id="print-header-bg" class="print-header">
+                    <div class="absolute bottom-0 left-0 w-full bg-black/60 p-4 text-white">
+                        <h1 id="print-title-text" class="text-3xl font-bold font-serif">タイトル</h1>
+                    </div>
+                </div>
+
+                <div id="print-body-content" class="print-body">
+                    </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const editor = document.getElementById('editor');
+        const printBody = document.getElementById('print-body-content');
+        const inpTitle = document.getElementById('inp-title');
+        const inpImg = document.getElementById('inp-img');
+        const printTitleText = document.getElementById('print-title-text');
+        const printHeaderBg = document.getElementById('print-header-bg');
+
+        // 入力同期
+        function update() {
+            // タイトル・画像の反映
+            printTitleText.innerText = inpTitle.value;
+            printHeaderBg.style.backgroundImage = `url('${inpImg.value}')`;
+
+            // 本文の簡易パース
+            const text = editor.value;
+            const lines = text.split('\n');
+            let html = '';
+
+            lines.forEach(line => {
+                let l = line.trim();
+                if(l.startsWith('# ')) {
+                    html += `<h3 class="scene-header">${l.substring(2)}</h3>`;
+                } else if(l.startsWith('> ')) {
+                    html += `<div class="read-aloud">${l.substring(2)}</div>`;
+                } else if(l.includes('{{HO1}}')) {
+                    html += `
+                    <div class="data-box border-2 border-black p-2 my-2 bg-gray-100">
+                        <div class="font-bold bg-black text-white px-2 inline-block text-xs mb-1">ハンドアウト PC1</div>
+                        <div class="text-sm p-1"><strong>【使命】</strong><br>ここに使命を書く</div>
+                        <div class="text-sm p-1 border-t border-dashed border-gray-400 mt-1"><strong>【秘密】</strong><br>ここに秘密を書く</div>
+                    </div>`;
+                } else if(l === '') {
+                    html += '<br>';
+                } else {
+                    html += `<p class="mb-2 text-justify leading-relaxed">${l}</p>`;
+                }
+            });
+
+            printBody.innerHTML = html;
+        }
+
+        editor.addEventListener('input', update);
+        inpTitle.addEventListener('input', update);
+        inpImg.addEventListener('input', update);
+        
+        // 初回実行
+        update();
+    </script>
+</body>
+</html>
